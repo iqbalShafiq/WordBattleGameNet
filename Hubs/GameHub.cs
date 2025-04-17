@@ -41,7 +41,6 @@ namespace WordBattleGame.Hubs
             if (matchedPlayers != null)
             {
                 var players = _playerRepository.GetByIdsAsync(matchedPlayers).Result;
-
                 var game = new Game
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -49,8 +48,11 @@ namespace WordBattleGame.Hubs
                     CreatedAt = DateTime.UtcNow,
                     Players = players
                 };
+
                 await _gameRepository.AddAsync(game);
                 var gameId = game.Id;
+                await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
+
                 foreach (var pid in matchedPlayers)
                 {
                     await Clients.User(pid).SendAsync("MatchFound", gameId, matchedPlayers);
@@ -84,10 +86,31 @@ namespace WordBattleGame.Hubs
             await Clients.Group(gameId).SendAsync("RoundStarted", newGeneratedWord, targetWord, roundNumber);
         }
 
-        public async Task EndRound(string gameId, int roundNumber)
+        public async Task EndRound(string roundId)
         {
-            // Logic untuk mengakhiri round
-            await Clients.Group(gameId).SendAsync("RoundEnded", roundNumber);
+            var round = await _roundRepository.GetByIdAsync(roundId);
+            if (round == null) return;
+
+            await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, null);
+        }
+
+        public async Task SubmitAnswer(string roundId, string playerId, string answer)
+        {
+            var round = await _roundRepository.GetByIdAsync(roundId);
+            if (round == null) return;
+
+            var isCorrect = string.Equals(answer, round.TrueWord, StringComparison.OrdinalIgnoreCase);
+            await Clients.Group(round.GameId).SendAsync("AnswerSubmitted", playerId, answer, isCorrect);
+
+            if (isCorrect)
+            {
+                await Clients.User(playerId).SendAsync("CorrectAnswer", round.TrueWord);
+                await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, playerId);
+            }
+            else
+            {
+                await Clients.User(playerId).SendAsync("IncorrectAnswer", round.TrueWord);
+            }
         }
 
         public async Task SendChat(string gameId, string playerId, string message)

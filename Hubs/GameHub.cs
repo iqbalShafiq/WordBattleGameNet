@@ -1,32 +1,24 @@
 using Microsoft.AspNetCore.SignalR;
 using WordBattleGame.Repositories;
 using WordBattleGame.Models;
+using WordBattleGame.Services;
+using WordBattleGame.Utils;
 
 namespace WordBattleGame.Hubs
 {
-    public class GameHub : Hub
+    public class GameHub(
+        IGameRepository gameRepository,
+        IRoundRepository roundRepository,
+        IWordGeneratorService wordGeneratorService,
+        IPlayerRepository playerRepository
+    ) : Hub
     {
-        private readonly IGameRepository _gameRepository;
-        private readonly IPlayerRepository _playerRepository;
-
-        public GameHub(IGameRepository gameRepository)
-        {
-            _gameRepository = gameRepository;
-        }
-        private static readonly List<string> MatchMakingQueue = new();
-        private static readonly object QueueLock = new();
-
-        public async Task JoinGame(string gameId)
-        {
-            await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
-            await Clients.Group(gameId).SendAsync("PlayerJoined", Context.ConnectionId);
-        }
-
-        // Contoh: broadcast pesan ke semua player di game
-        public async Task SendMessageToGame(string gameId, string message)
-        {
-            await Clients.Group(gameId).SendAsync("ReceiveMessage", Context.ConnectionId, message);
-        }
+        private readonly IGameRepository _gameRepository = gameRepository;
+        private readonly IRoundRepository _roundRepository = roundRepository;
+        private readonly IPlayerRepository _playerRepository = playerRepository;
+        private readonly IWordGeneratorService _wordGeneratorService = wordGeneratorService;
+        private static readonly List<string> MatchMakingQueue = [];
+        private static readonly Lock QueueLock = new();
 
         public async Task JoinMatchMaking(string playerId)
         {
@@ -37,12 +29,12 @@ namespace WordBattleGame.Hubs
             }
             await Clients.Caller.SendAsync("MatchMakingJoined", playerId);
 
-            string[] matchedPlayers = null;
+            string[]? matchedPlayers = null;
             lock (QueueLock)
             {
                 if (MatchMakingQueue.Count >= 2)
                 {
-                    matchedPlayers = MatchMakingQueue.Take(2).ToArray();
+                    matchedPlayers = [.. MatchMakingQueue.Take(2)];
                     MatchMakingQueue.RemoveRange(0, 2);
                 }
             }
@@ -50,13 +42,12 @@ namespace WordBattleGame.Hubs
             {
                 var players = _playerRepository.GetByIdsAsync(matchedPlayers).Result;
 
-                // Buat game baru lewat repository
                 var game = new Game
                 {
                     Id = Guid.NewGuid().ToString(),
-                    MaxRound = 5, // default, bisa diatur sesuai kebutuhan
+                    MaxRound = 5,
                     CreatedAt = DateTime.UtcNow,
-                    Players = new List<Player>() // relasi akan diisi di controller/service sesuai kebutuhan
+                    Players = players
                 };
                 await _gameRepository.AddAsync(game);
                 var gameId = game.Id;
@@ -69,20 +60,28 @@ namespace WordBattleGame.Hubs
 
         public async Task LeaveMatchMaking(string playerId)
         {
-            // Logic untuk keluar dari antrean matchmaking
+            MatchMakingQueue.Remove(playerId);
             await Clients.Caller.SendAsync("MatchMakingLeft", playerId);
         }
 
-        public async Task LeaveGame(string gameId)
+        public async Task StartRound(string gameId, int roundNumber, string language, string difficulty)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameId);
-            await Clients.Group(gameId).SendAsync("PlayerLeft", Context.ConnectionId);
-        }
+            var targetWord = await _wordGeneratorService.GenerateWordAsync(language, difficulty);
+            var newGeneratedWord = WordUtils.ShuffleWord(targetWord);
 
-        public async Task StartRound(string gameId, int roundNumber)
-        {
-            // Logic untuk mulai round baru
-            await Clients.Group(gameId).SendAsync("RoundStarted", roundNumber);
+            var newRound = new Round
+            {
+                Id = Guid.NewGuid().ToString(),
+                GameId = gameId,
+                RoundNumber = roundNumber,
+                Difficulty = difficulty,
+                GeneratedWord = newGeneratedWord,
+                TrueWord = targetWord,
+                Language = language,
+            };
+
+            await _roundRepository.AddAsync(newRound);
+            await Clients.Group(gameId).SendAsync("RoundStarted", newGeneratedWord, targetWord, roundNumber);
         }
 
         public async Task EndRound(string gameId, int roundNumber)
@@ -96,6 +95,10 @@ namespace WordBattleGame.Hubs
             await Clients.Group(gameId).SendAsync("ReceiveChat", playerId, message);
         }
 
-        // Tambahkan method lain sesuai kebutuhan event game (start round, submit answer, dsb)
+        public async Task LeaveGame(string gameId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameId);
+            await Clients.Group(gameId).SendAsync("PlayerLeft", Context.ConnectionId);
+        }
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WordBattleGame.Models;
 using WordBattleGame.Services;
 using WordBattleGame.Repositories;
+using WordBattleGame.Utils;
 
 namespace WordBattleGame.Controllers
 {
@@ -17,7 +18,7 @@ namespace WordBattleGame.Controllers
         public async Task<ActionResult<GeneratedWordResponseDto>> GenerateWord([FromQuery] string language, [FromQuery] string difficulty)
         {
             var trueWord = await _wordGeneratorService.GenerateWordAsync(language, difficulty);
-            var generatedWord = ShuffleWord(trueWord);
+            var generatedWord = WordUtils.ShuffleWord(trueWord);
             var response = new GeneratedWordResponseDto
             {
                 GeneratedWord = generatedWord,
@@ -33,7 +34,7 @@ namespace WordBattleGame.Controllers
             if (game == null) return NotFound("Game not found");
 
             var trueWord = await _wordGeneratorService.GenerateWordAsync(language, difficulty);
-            var generatedWord = ShuffleWord(trueWord);
+            var generatedWord = WordUtils.ShuffleWord(trueWord);
 
             var roundNumber = (game.Rounds?.Count ?? 0) + 1;
 
@@ -49,18 +50,6 @@ namespace WordBattleGame.Controllers
             };
             await _roundRepository.AddAsync(round);
             return CreatedAtAction(nameof(CreateRound), new { id = round.Id }, round);
-        }
-
-        private static string ShuffleWord(string word)
-        {
-            var chars = word.ToCharArray();
-            var rng = new Random();
-            for (int i = chars.Length - 1; i > 0; i--)
-            {
-                int j = rng.Next(i + 1);
-                (chars[i], chars[j]) = (chars[j], chars[i]);
-            }
-            return new string(chars);
         }
     }
 }

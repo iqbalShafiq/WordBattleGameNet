@@ -3,8 +3,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using WordBattleGame.Hubs;
+using DotNetEnv; // tambahkan ini
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Tambahkan ini sebelum konfigurasi lain
+DotNetEnv.Env.Load();
 
 // Add services to the container.
 builder.Services.AddOpenApi();
@@ -13,8 +17,12 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
 // Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY");
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER");
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE");
+// ExpiresInMinutes bisa diambil jika perlu
+
+var key = Encoding.UTF8.GetBytes(jwtKey!);
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -28,8 +36,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 });

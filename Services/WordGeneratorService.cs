@@ -4,10 +4,10 @@ using System.Text.Json;
 
 namespace WordBattleGame.Services
 {
-    public class WordGeneratorService(IConfiguration config) : IWordGeneratorService
+    public class WordGeneratorService : IWordGeneratorService
     {
         private readonly HttpClient _httpClient = new();
-        private readonly string _openAiApiKey = config["OpenAI:ApiKey"] ?? string.Empty;
+        private readonly string _openAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? string.Empty;
 
         public async Task<string> GenerateWordAsync(string language, string difficulty)
         {

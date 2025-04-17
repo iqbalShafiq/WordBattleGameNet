@@ -11,7 +11,7 @@ namespace WordBattleGame.Models
         [ForeignKey("PlayerId")]
         public Player Player { get; set; } = default!;
         public int TotalGames { get; set; }
-        public int HighestScore { get; set; }
+        public int TotalScore { get; set; }
         public int Win { get; set; }
         public int Lose { get; set; }
         public int Draw { get; set; }

@@ -21,5 +21,20 @@ namespace WordBattleGame.Repositories
         {
             return await _context.Players.Where(p => playerIds.Contains(p.Id)).ToListAsync();
         }
+
+        public async Task<PlayerStats> UpdateStatsAsync(string playerId, int score, bool? isWin)
+        {
+            var playerStats = await _context.PlayerStats.FindAsync(playerId) ?? throw new Exception("Player stats not found");
+            playerStats.TotalScore += score;
+            if (isWin == null) playerStats.Draw++;
+            else
+            {
+                if ((bool)isWin) playerStats.Win++;
+                else playerStats.Lose++;
+            }
+
+            await _context.SaveChangesAsync();
+            return playerStats;
+        }
     }
 }

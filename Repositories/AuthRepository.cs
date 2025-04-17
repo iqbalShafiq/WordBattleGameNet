@@ -13,18 +13,28 @@ namespace WordBattleGame.Repositories
 
         public async Task<Player?> RegisterAsync(PlayerRegisterDto dto)
         {
-            if (await _context.Players.AnyAsync(p => p.Email == dto.Email))
-                return null;
+            if (await _context.Players.AnyAsync(p => p.Email == dto.Email)) return null;
             var player = new Player
             {
                 Id = Guid.NewGuid().ToString(),
                 Name = dto.Name,
                 Email = dto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Score = 0,
                 CreatedAt = DateTime.UtcNow
             };
             _context.Players.Add(player);
+
+            var playerStats = new PlayerStats
+            {
+                Id = Guid.NewGuid().ToString(),
+                PlayerId = player.Id,
+                TotalScore = 0,
+                Win = 0,
+                Lose = 0,
+                Draw = 0
+            };
+            _context.PlayerStats.Add(playerStats);
+
             await _context.SaveChangesAsync();
             return player;
         }

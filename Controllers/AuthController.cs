@@ -37,7 +37,6 @@ namespace WordBattleGame.Controllers
                     Id = player.Id,
                     Name = player.Name,
                     Email = player.Email,
-                    Score = player.Score,
                     CreatedAt = player.CreatedAt
                 },
                 RefreshToken = refreshToken?.Token ?? string.Empty

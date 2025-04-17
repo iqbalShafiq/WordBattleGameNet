@@ -92,6 +92,12 @@ namespace WordBattleGame.Hubs
             if (round == null) return;
 
             await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, null);
+
+            if (round.Game.MaxRound == round.RoundNumber)
+            {
+                await Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, round.GameId);
+            }
         }
 
         public async Task SubmitAnswer(string roundId, string playerId, string answer)
@@ -104,6 +110,21 @@ namespace WordBattleGame.Hubs
 
             if (isCorrect)
             {
+                if (round.Game.MaxRound == round.RoundNumber)
+                {
+                    var score = 1;
+                    await _playerRepository.UpdateStatsAsync(playerId, score, true);
+
+                    foreach (var player in round.Game.Players)
+                    {
+                        if (player.Id != playerId)
+                        {
+                            await _playerRepository.UpdateStatsAsync(player.Id, 0, false);
+                        }
+                    }
+                    await Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, round.GameId);
+                }
                 await Clients.User(playerId).SendAsync("CorrectAnswer", round.TrueWord);
                 await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, playerId);
             }

@@ -155,8 +155,7 @@ namespace WordBattleGame.Hubs
             };
 
             await _roundRepository.AddAsync(newRound);
-            await Clients.Group(gameId).SendAsync("RoundStarted", newGeneratedWord, targetWord, roundNumber);
-            _logger.LogInformation($"[StartRound] RoundStarted sent for game {gameId}, round {roundNumber}");
+            await Clients.Group(gameId).SendAsync("RoundStarted", newRound.Id, newGeneratedWord, targetWord, roundNumber);
 
             // Start countdown
             int countdown = 30;
@@ -168,15 +167,12 @@ namespace WordBattleGame.Hubs
                 RoundCountdownTokens[gameId] = cts;
             }
 
-            _logger.LogInformation($"[StartRound] Countdown started for game {gameId}, round {roundNumber}");
-
             _ = Task.Run(async () =>
             {
                 try
                 {
                     for (int i = countdown; i >= 0; i--)
                     {
-                        _logger.LogInformation($"[Countdown] Game {gameId}, round {roundNumber}, tick: {i}");
                         await _hubContext.Clients.Group(gameId).SendAsync("CountdownTick", i);
                         await Task.Delay(1000, cts.Token);
                     }

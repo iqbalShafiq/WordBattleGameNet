@@ -14,9 +14,12 @@ namespace WordBattleGame.Controllers
         private readonly IGameRepository _gameRepository = gameRepository;
         private readonly IRoundRepository _roundRepository = roundRepository;
 
-        [HttpGet("generate-word")]
-        public async Task<ActionResult<GeneratedWordResponseDto>> GenerateWord([FromQuery] string language, [FromQuery] string difficulty)
+        [HttpPost("generate-word")]
+        public async Task<ActionResult<GeneratedWordResponseDto>> GenerateWord(
+            [FromBody] GenerateWordRequestDto dto
+        )
         {
+            var (language, difficulty) = (dto.Language, dto.Difficulty);
             var trueWord = await _wordGeneratorService.GenerateWordAsync(language, difficulty);
             var generatedWord = WordUtils.ShuffleWord(trueWord);
             var response = new GeneratedWordResponseDto
@@ -28,8 +31,11 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPost("create-round")]
-        public async Task<ActionResult<Round>> CreateRound([FromQuery] string gameId, [FromQuery] string language, [FromQuery] string difficulty)
+        public async Task<ActionResult<Round>> CreateRound(
+            [FromBody] CreateRoundRequestDto dto
+        )
         {
+            var (gameId, language, difficulty) = (dto.GameId, dto.Language, dto.Difficulty);
             var game = await _gameRepository.GetByIdAsync(gameId);
             if (game == null) return NotFound("Game not found");
 

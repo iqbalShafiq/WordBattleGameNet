@@ -13,7 +13,9 @@ namespace WordBattleGame.Controllers
         private readonly IConfiguration _config = config;
 
         [HttpPost("register")]
-        public async Task<ActionResult<Player>> Register(PlayerRegisterDto dto)
+        public async Task<ActionResult<Player>> Register(
+            [FromBody] PlayerRegisterDto dto
+        )
         {
             var player = await _authRepository.RegisterAsync(dto);
             if (player == null)
@@ -22,7 +24,9 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<ActionResult<LoginResponseDto>> Login(PlayerLoginDto dto)
+        public async Task<ActionResult<LoginResponseDto>> Login(
+            [FromBody] PlayerLoginDto dto
+        )
         {
             var (player, error) = await _authRepository.LoginAsync(dto);
             if (player == null)
@@ -45,16 +49,21 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPost("refresh")]
-        public async Task<ActionResult<object>> RefreshToken([FromBody] string refreshToken)
+        public async Task<ActionResult<object>> RefreshToken(
+            [FromBody] RefreshTokenRequestDto dto
+        )
         {
-            var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(refreshToken);
+            var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(dto.RefreshToken);
             if (token == null)
                 return Unauthorized(error);
             return Ok(new { token, refreshToken = newRefreshToken });
         }
 
         [HttpPut("update-profile/{id}")]
-        public async Task<IActionResult> UpdateProfile(string id, UpdateProfileDto dto)
+        public async Task<IActionResult> UpdateProfile(
+            [FromRoute] string id, 
+            [FromBody] UpdateProfileDto dto
+        )
         {
             var success = await _authRepository.UpdateProfileAsync(id, dto);
             if (!success) return NotFound();
@@ -62,7 +71,10 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPut("change-password/{id}")]
-        public async Task<IActionResult> ChangePassword(string id, ChangePasswordDto dto)
+        public async Task<IActionResult> ChangePassword(
+            [FromRoute] string id, 
+            [FromBody] ChangePasswordDto dto
+        )
         {
             var (success, error) = await _authRepository.ChangePasswordAsync(id, dto);
             if (!success) return BadRequest(error);

@@ -25,7 +25,7 @@ namespace WordBattleGame.Hubs
         private static readonly List<string> MatchMakingQueue = [];
         private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = new();
         private static readonly Lock QueueLock = new();
-        private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = new();
+        private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = [];
 
         public async Task JoinMatchMaking(string playerId)
         {
@@ -86,12 +86,13 @@ namespace WordBattleGame.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
             lock (GameJoinStatus)
             {
-                if (!GameJoinStatus.ContainsKey(gameId))
+                if (!GameJoinStatus.TryGetValue(gameId, out HashSet<string>? value))
                 {
-                    GameJoinStatus[gameId] = new HashSet<string>();
+                    value = [];
+                    GameJoinStatus[gameId] = value;
                 }
 
-                GameJoinStatus[gameId].Add(playerId);
+                value.Add(playerId);
             }
 
             var expectedPlayers = await _gameRepository.GetExpectedPlayersAsync(gameId);

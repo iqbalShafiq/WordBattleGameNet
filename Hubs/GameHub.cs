@@ -11,9 +11,11 @@ namespace WordBattleGame.Hubs
         IGameRepository gameRepository,
         IRoundRepository roundRepository,
         IWordGeneratorService wordGeneratorService,
-        IPlayerRepository playerRepository
+        IPlayerRepository playerRepository,
+        IHubContext<GameHub> hubContext
     ) : Hub
     {
+        private readonly IHubContext<GameHub> _hubContext = hubContext;
         private readonly ILogger<GameHub> _logger = logger;
         private readonly IGameRepository _gameRepository = gameRepository;
         private readonly IRoundRepository _roundRepository = roundRepository;
@@ -23,6 +25,7 @@ namespace WordBattleGame.Hubs
         private static readonly List<string> MatchMakingQueue = [];
         private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = new();
         private static readonly Lock QueueLock = new();
+        private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = new();
 
         public async Task JoinMatchMaking(string playerId)
         {
@@ -123,6 +126,44 @@ namespace WordBattleGame.Hubs
 
             await _roundRepository.AddAsync(newRound);
             await Clients.Group(gameId).SendAsync("RoundStarted", newGeneratedWord, targetWord, roundNumber);
+            _logger.LogInformation($"[StartRound] RoundStarted sent for game {gameId}, round {roundNumber}");
+
+            // Start countdown
+            int countdown = 30;
+            var cts = new CancellationTokenSource();
+            lock (RoundCountdownTokens)
+            {
+                if (RoundCountdownTokens.TryGetValue(gameId, out CancellationTokenSource? value))
+                    value.Cancel();
+                RoundCountdownTokens[gameId] = cts;
+            }
+
+            _logger.LogInformation($"[StartRound] Countdown started for game {gameId}, round {roundNumber}");
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    for (int i = countdown; i >= 0; i--)
+                    {
+                        _logger.LogInformation($"[Countdown] Game {gameId}, round {roundNumber}, tick: {i}");
+                        await _hubContext.Clients.Group(gameId).SendAsync("CountdownTick", i);
+                        await Task.Delay(1000, cts.Token);
+                    }
+
+                    // Time's up, round ended
+                    _logger.LogInformation($"[Countdown] Time's up for game {gameId}, round {roundNumber}");
+                    await EndRound(newRound.Id);
+                }
+                catch (TaskCanceledException)
+                {
+                    _logger.LogWarning($"[Countdown] Countdown for game {gameId}, round {roundNumber} was canceled.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"[Countdown] Error in countdown for game {gameId}, round {roundNumber}");
+                }
+            });
         }
 
         public async Task EndRound(string roundId)

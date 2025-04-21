@@ -7,21 +7,26 @@ using WordBattleGame.Utils;
 namespace WordBattleGame.Hubs
 {
     public class GameHub(
+        ILogger<GameHub> logger,
         IGameRepository gameRepository,
         IRoundRepository roundRepository,
         IWordGeneratorService wordGeneratorService,
         IPlayerRepository playerRepository
     ) : Hub
     {
+        private readonly ILogger<GameHub> _logger = logger;
         private readonly IGameRepository _gameRepository = gameRepository;
         private readonly IRoundRepository _roundRepository = roundRepository;
         private readonly IPlayerRepository _playerRepository = playerRepository;
         private readonly IWordGeneratorService _wordGeneratorService = wordGeneratorService;
+
         private static readonly List<string> MatchMakingQueue = [];
+        private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = new();
         private static readonly Lock QueueLock = new();
 
         public async Task JoinMatchMaking(string playerId)
         {
+            _logger.LogInformation($"Player {playerId} joined matchmaking.");
             lock (QueueLock)
             {
                 if (!MatchMakingQueue.Contains(playerId))
@@ -32,15 +37,25 @@ namespace WordBattleGame.Hubs
             string[]? matchedPlayers = null;
             lock (QueueLock)
             {
+                _logger.LogInformation($"Current matchmaking queue: {string.Join(", ", MatchMakingQueue)}");
                 if (MatchMakingQueue.Count >= 2)
                 {
                     matchedPlayers = [.. MatchMakingQueue.Take(2)];
                     MatchMakingQueue.RemoveRange(0, 2);
                 }
             }
+
+            _logger.LogInformation($"Matched players: {string.Join(", ", matchedPlayers ?? [])}");
+
             if (matchedPlayers != null)
             {
                 var players = _playerRepository.GetByIdsAsync(matchedPlayers).Result;
+                if (players == null || players.Count == 0)
+                {
+                    await Clients.Caller.SendAsync("MatchMakingFailed", "No players found.");
+                    return;
+                }
+
                 var game = new Game
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -51,12 +66,36 @@ namespace WordBattleGame.Hubs
 
                 await _gameRepository.AddAsync(game);
                 var gameId = game.Id;
-                await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
 
                 foreach (var pid in matchedPlayers)
                 {
-                    await Clients.User(pid).SendAsync("MatchFound", gameId, matchedPlayers);
+                    await Clients.User(pid).SendAsync("MatchFound", new
+                    {
+                        gameId,
+                        matchedPlayers
+                    });
                 }
+            }
+        }
+
+        public async Task JoinGame(string gameId, string playerId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
+            lock (GameJoinStatus)
+            {
+                if (!GameJoinStatus.ContainsKey(gameId))
+                {
+                    GameJoinStatus[gameId] = new HashSet<string>();
+                }
+
+                GameJoinStatus[gameId].Add(playerId);
+            }
+
+            var expectedPlayers = await _gameRepository.GetExpectedPlayersAsync(gameId);
+            if (GameJoinStatus[gameId].Count == expectedPlayers.ToList().Count)
+            {
+                await Clients.Group(gameId).SendAsync("AllPlayersJoined", gameId);
+                await StartRound(gameId, 1, "en", "easy");
             }
         }
 

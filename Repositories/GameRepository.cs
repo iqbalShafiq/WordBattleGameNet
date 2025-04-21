@@ -19,6 +19,15 @@ namespace WordBattleGame.Repositories
         {
             return await _context.Games.Include(g => g.Players).Include(g => g.Rounds).ToListAsync();
         }
+        public async Task<IEnumerable<Player>> GetExpectedPlayersAsync(string gameId)
+        {
+            var game = await _context.Games
+                .Include(g => g.Players)
+                .FirstOrDefaultAsync(g => g.Id == gameId);
+            if (game == null) return Enumerable.Empty<Player>();
+
+            return game.Players.ToList();
+        }
         public async Task AddAsync(Game game)
         {
             _context.Games.Add(game);

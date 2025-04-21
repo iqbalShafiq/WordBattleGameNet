@@ -4,3 +4,4 @@ appsettings.Development.json
 *.user
 *.vs/
 *.env
+.fake

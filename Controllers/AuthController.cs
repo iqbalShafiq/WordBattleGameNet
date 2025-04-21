@@ -13,14 +13,20 @@ namespace WordBattleGame.Controllers
         private readonly IConfiguration _config = config;
 
         [HttpPost("register")]
-        public async Task<ActionResult<Player>> Register(
+        public async Task<ActionResult<PlayerDto>> Register(
             [FromBody] PlayerRegisterDto dto
         )
         {
             var player = await _authRepository.RegisterAsync(dto);
-            if (player == null)
-                return BadRequest("Email already registered.");
-            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, player);
+            if (player == null) return BadRequest("Email already registered.");
+            var playerDto = new PlayerDto
+            {
+                Id = player.Id,
+                Name = player.Name,
+                Email = player.Email,
+                CreatedAt = player.CreatedAt
+            };
+            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, playerDto);
         }
 
         [HttpPost("login")]
@@ -61,7 +67,7 @@ namespace WordBattleGame.Controllers
 
         [HttpPut("update-profile/{id}")]
         public async Task<IActionResult> UpdateProfile(
-            [FromRoute] string id, 
+            [FromRoute] string id,
             [FromBody] UpdateProfileDto dto
         )
         {
@@ -72,7 +78,7 @@ namespace WordBattleGame.Controllers
 
         [HttpPut("change-password/{id}")]
         public async Task<IActionResult> ChangePassword(
-            [FromRoute] string id, 
+            [FromRoute] string id,
             [FromBody] ChangePasswordDto dto
         )
         {

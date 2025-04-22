@@ -112,7 +112,6 @@ namespace WordBattleGame.Hubs
             await Clients.Caller.SendAsync("MatchMakingLeft", playerId);
         }
 
-        // Static helper untuk EndRound
         private static async Task EndRoundHelper(
             string roundId,
             IRoundRepository roundRepository,
@@ -130,7 +129,6 @@ namespace WordBattleGame.Hubs
             if (round.Game.MaxRound == round.RoundNumber)
             {
                 await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
-                // Hanya remove group jika context tersedia (bukan dari background task)
                 if (callerContext != null && groupManager != null)
                 {
                     await groupManager.RemoveFromGroupAsync(callerContext.ConnectionId, round.GameId);
@@ -177,17 +175,12 @@ namespace WordBattleGame.Hubs
                         await Task.Delay(1000, cts.Token);
                     }
 
-                    // Time's up, round ended
-                    _logger.LogInformation($"[Countdown] Time's up for game {gameId}, round {roundNumber}");
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var roundRepo = scope.ServiceProvider.GetRequiredService<IRoundRepository>();
+                    var hub = scope.ServiceProvider.GetRequiredService<IHubContext<GameHub>>();
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameHub>>();
 
-                    using (var scope = _serviceScopeFactory.CreateScope())
-                    {
-                        var roundRepo = scope.ServiceProvider.GetRequiredService<IRoundRepository>();
-                        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<GameHub>>();
-                        var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameHub>>();
-
-                        await EndRoundHelper(newRound.Id, roundRepo, hub, logger);
-                    }
+                    await EndRoundHelper(newRound.Id, roundRepo, hub, logger);
                 }
                 catch (TaskCanceledException)
                 {
@@ -239,6 +232,7 @@ namespace WordBattleGame.Hubs
                 }
                 await Clients.User(playerId).SendAsync("CorrectAnswer", round.TrueWord);
                 await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, playerId);
+                await StartRound(round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
             }
             else
             {

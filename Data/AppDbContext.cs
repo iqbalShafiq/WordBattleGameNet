@@ -10,5 +10,6 @@ namespace WordBattleGame.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Game> Games { get; set; }
         public DbSet<Round> Rounds { get; set; }
+        public DbSet<WordHistory> WordHistories { get; set; }
     }
 }

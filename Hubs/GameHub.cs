@@ -3,7 +3,6 @@ using WordBattleGame.Repositories;
 using WordBattleGame.Models;
 using WordBattleGame.Services;
 using WordBattleGame.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace WordBattleGame.Hubs
 {
@@ -112,96 +111,26 @@ namespace WordBattleGame.Hubs
             await Clients.Caller.SendAsync("MatchMakingLeft", playerId);
         }
 
-        private static async Task EndRoundHelper(
-            string roundId,
-            IRoundRepository roundRepository,
-            IHubContext<GameHub> hubContext,
-            ILogger<GameHub> logger,
-            HubCallerContext? callerContext = null,
-            IGroupManager? groupManager = null
-        )
-        {
-            var round = await roundRepository.GetByIdAsync(roundId);
-            if (round == null) return;
-
-            await hubContext.Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, null);
-
-            if (round.Game.MaxRound == round.RoundNumber)
-            {
-                await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
-                if (callerContext != null && groupManager != null)
-                {
-                    await groupManager.RemoveFromGroupAsync(callerContext.ConnectionId, round.GameId);
-                }
-            }
-        }
-
         public async Task StartRound(string gameId, int roundNumber, string language, string difficulty)
         {
-            var targetWord = await _wordGeneratorService.GenerateWordAsync(language, difficulty);
-            var newGeneratedWord = WordUtils.ShuffleWord(targetWord);
-
-            var newRound = new Round
-            {
-                Id = Guid.NewGuid().ToString(),
-                GameId = gameId,
-                RoundNumber = roundNumber,
-                Difficulty = difficulty,
-                GeneratedWord = newGeneratedWord,
-                TrueWord = targetWord,
-                Language = language,
-            };
-
-            await _roundRepository.AddAsync(newRound);
-            await Clients.Group(gameId).SendAsync("RoundStarted", newRound.Id, newGeneratedWord, targetWord, roundNumber);
-
-            // Start countdown
-            int countdown = 30;
-            var cts = new CancellationTokenSource();
-            lock (RoundCountdownTokens)
-            {
-                if (RoundCountdownTokens.TryGetValue(gameId, out CancellationTokenSource? value))
-                    value.Cancel();
-                RoundCountdownTokens[gameId] = cts;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    for (int i = countdown; i >= 0; i--)
-                    {
-                        await _hubContext.Clients.Group(gameId).SendAsync("CountdownTick", i);
-                        await Task.Delay(1000, cts.Token);
-                    }
-
-                    using var scope = _serviceScopeFactory.CreateScope();
-                    var roundRepo = scope.ServiceProvider.GetRequiredService<IRoundRepository>();
-                    var hub = scope.ServiceProvider.GetRequiredService<IHubContext<GameHub>>();
-                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameHub>>();
-
-                    await EndRoundHelper(newRound.Id, roundRepo, hub, logger);
-                }
-                catch (TaskCanceledException)
-                {
-                    _logger.LogWarning($"[Countdown] Countdown for game {gameId}, round {roundNumber} was canceled.");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"[Countdown] Error in countdown for game {gameId}, round {roundNumber}");
-                }
-            });
+            await RoundHelper.StartRoundAsync(
+                _hubContext,
+                _serviceScopeFactory,
+                _logger,
+                gameId,
+                roundNumber,
+                language,
+                difficulty
+            );
         }
 
         public async Task EndRound(string roundId)
         {
-            await EndRoundHelper(
-                roundId,
-                _roundRepository,
+            await RoundHelper.EndRoundAsync(
                 _hubContext,
-                _logger,
-                Context,
-                Groups
+                _serviceScopeFactory,
+                roundId,
+                _logger
             );
         }
 

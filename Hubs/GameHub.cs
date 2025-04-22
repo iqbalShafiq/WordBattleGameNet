@@ -144,6 +144,7 @@ namespace WordBattleGame.Hubs
 
             if (isCorrect)
             {
+                RoundHelper.CancelCountdown(roundId);
                 if (round.Game.MaxRound == round.RoundNumber)
                 {
                     var score = 1;

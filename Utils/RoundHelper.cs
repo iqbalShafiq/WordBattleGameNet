@@ -7,6 +7,9 @@ namespace WordBattleGame.Utils
 {
     public static class RoundHelper
     {
+        // Simpan CTS per roundId
+        private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = new();
+
         public static async Task StartRoundAsync(
             IHubContext<Hubs.GameHub> hubContext,
             IServiceScopeFactory scopeFactory,
@@ -15,7 +18,7 @@ namespace WordBattleGame.Utils
             int roundNumber,
             string language,
             string difficulty,
-            int countdownSeconds = 5,
+            int countdownSeconds = 60,
             CancellationToken? externalToken = null)
         {
             using var scope = scopeFactory.CreateScope();
@@ -40,9 +43,17 @@ namespace WordBattleGame.Utils
             await roundRepository.AddAsync(newRound);
             await hubContext.Clients.Group(gameId).SendAsync("RoundStarted", newRound.Id, newGeneratedWord, targetWord, roundNumber);
 
-            var cts = externalToken.HasValue ?
-                CancellationTokenSource.CreateLinkedTokenSource(externalToken.Value) :
-                new CancellationTokenSource();
+            // Buat CTS baru untuk round ini
+            var cts = new CancellationTokenSource();
+            lock (RoundCountdownTokens)
+            {
+                if (RoundCountdownTokens.TryGetValue(newRound.Id, out var oldCts))
+                {
+                    oldCts.Cancel();
+                    oldCts.Dispose();
+                }
+                RoundCountdownTokens[newRound.Id] = cts;
+            }
             var token = cts.Token;
 
             _ = Task.Run(async () =>
@@ -69,7 +80,14 @@ namespace WordBattleGame.Utils
                 }
                 finally
                 {
-                    cts.Dispose();
+                    lock (RoundCountdownTokens)
+                    {
+                        if (RoundCountdownTokens.TryGetValue(newRound.Id, out var toDispose))
+                        {
+                            toDispose.Dispose();
+                            RoundCountdownTokens.Remove(newRound.Id);
+                        }
+                    }
                 }
             });
         }
@@ -101,6 +119,19 @@ namespace WordBattleGame.Utils
             else
             {
                 logger.LogWarning($"Game {round.GameId} not found for round {round.RoundNumber}.");
+            }
+        }
+
+        public static void CancelCountdown(string roundId)
+        {
+            lock (RoundCountdownTokens)
+            {
+                if (RoundCountdownTokens.TryGetValue(roundId, out var cts))
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                    RoundCountdownTokens.Remove(roundId);
+                }
             }
         }
     }

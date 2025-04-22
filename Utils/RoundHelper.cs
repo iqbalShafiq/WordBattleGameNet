@@ -7,7 +7,6 @@ namespace WordBattleGame.Utils
 {
     public static class RoundHelper
     {
-        // Simpan CTS per roundId
         private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = new();
 
         public static async Task StartRoundAsync(
@@ -18,14 +17,23 @@ namespace WordBattleGame.Utils
             int roundNumber,
             string language,
             string difficulty,
-            int countdownSeconds = 60,
+            int countdownSeconds = 5,
             CancellationToken? externalToken = null)
         {
             using var scope = scopeFactory.CreateScope();
             var roundRepository = scope.ServiceProvider.GetRequiredService<IRoundRepository>();
+            var gameRepository = scope.ServiceProvider.GetRequiredService<IGameRepository>();
             var wordGeneratorService = scope.ServiceProvider.GetRequiredService<IWordGeneratorService>();
 
-            var targetWord = await wordGeneratorService.GenerateWordAsync(language, difficulty);
+            var game = await gameRepository.GetByIdAsync(gameId);
+            if (game == null)
+            {
+                logger.LogWarning($"Game {gameId} not found.");
+                await hubContext.Clients.Group(gameId).SendAsync("GameNotFound", gameId);
+                return;
+            }
+
+            var targetWord = await wordGeneratorService.GenerateWordAsync(language, difficulty, game.Players.Select(p => p.Id));
             var newGeneratedWord = WordUtils.ShuffleWord(targetWord);
 
             logger.LogInformation($"Starting round {roundNumber} for game {gameId}. Generated word: {newGeneratedWord}, Target word: {targetWord}");

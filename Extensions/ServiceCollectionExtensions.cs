@@ -20,6 +20,7 @@ namespace WordBattleGame.Extensions
             services.AddScoped<IPlayerRepository, PlayerRepository>();
             services.AddScoped<IGameRepository, GameRepository>();
             services.AddScoped<IRoundRepository, RoundRepository>();
+            services.AddScoped<IWordHistoryRepository, WordHistoryRepository>();
             services.AddScoped<IWordGeneratorService, WordGeneratorService>();
             return services;
         }

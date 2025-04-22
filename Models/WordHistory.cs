@@ -8,6 +8,6 @@ namespace WordBattleGame.Models
         public int Id { get; set; }
         public string UserId { get; set; } = string.Empty;
         public string Word { get; set; } = string.Empty;
-        public DateTime UsedAt { get; set; }
+        public DateTime Timestamp { get; set; }
     }
 }

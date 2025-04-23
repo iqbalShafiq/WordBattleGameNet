@@ -39,22 +39,22 @@ namespace WordBattleGame.Hubs
             }
             await Clients.Caller.SendAsync("MatchMakingJoined", new MatchMakingJoinedDto { PlayerId = playerId });
 
-            string[]? matchedPlayers = null;
+            string[]? matchedPlayerIds = null;
             lock (QueueLock)
             {
                 _logger.LogInformation($"Current matchmaking queue: {string.Join(", ", MatchMakingQueue)}");
                 if (MatchMakingQueue.Count >= 2)
                 {
-                    matchedPlayers = [.. MatchMakingQueue.Take(2)];
+                    matchedPlayerIds = [.. MatchMakingQueue.Take(2)];
                     MatchMakingQueue.RemoveRange(0, 2);
                 }
             }
 
-            _logger.LogInformation($"Matched players: {string.Join(", ", matchedPlayers ?? [])}");
+            _logger.LogInformation($"Matched players: {string.Join(", ", matchedPlayerIds ?? [])}");
 
-            if (matchedPlayers != null)
+            if (matchedPlayerIds != null)
             {
-                var players = _playerRepository.GetByIdsAsync(matchedPlayers).Result;
+                var players = _playerRepository.GetByIdsAsync(matchedPlayerIds).Result;
                 if (players == null || players.Count == 0)
                 {
                     await Clients.Caller.SendAsync("MatchMakingFailed", new MatchMakingFailedDto { Message = "No players found." });
@@ -72,12 +72,12 @@ namespace WordBattleGame.Hubs
                 await _gameRepository.AddAsync(game);
                 var gameId = game.Id;
 
-                foreach (var pid in matchedPlayers)
+                foreach (var pid in matchedPlayerIds)
                 {
                     await Clients.User(pid).SendAsync("MatchFound", new MatchFoundDto
                     {
                         GameId = gameId,
-                        MatchedPlayers = [.. matchedPlayers]
+                        MatchedPlayerIds = [.. matchedPlayerIds]
                     });
                 }
             }

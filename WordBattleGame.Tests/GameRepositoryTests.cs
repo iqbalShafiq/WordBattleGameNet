@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using WordBattleGame.Data;
 using WordBattleGame.Models;
 using WordBattleGame.Repositories;
-using Xunit;
 
 namespace WordBattleGame.Tests
 {

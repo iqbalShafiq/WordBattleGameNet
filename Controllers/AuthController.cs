@@ -19,7 +19,7 @@ namespace WordBattleGame.Controllers
         )
         {
             var player = await _authRepository.RegisterAsync(dto);
-            if (player == null) return BadRequest("Email already registered.");
+            if (player == null) return BadRequest(new ErrorResponseDto { Message = "Email already registered.", Code = 400 });
             var playerDto = new PlayerDto
             {
                 Id = player.Id,
@@ -27,7 +27,7 @@ namespace WordBattleGame.Controllers
                 Email = player.Email,
                 CreatedAt = player.CreatedAt
             };
-            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, playerDto);
+            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success", 201));
         }
 
         [HttpPost("login")]
@@ -37,7 +37,7 @@ namespace WordBattleGame.Controllers
         {
             var (player, error) = await _authRepository.LoginAsync(dto);
             if (player == null)
-                return Unauthorized(error);
+                return Unauthorized(new ErrorResponseDto { Message = error ?? "Login failed.", Code = 401 });
             var token = JwtHelper.GenerateToken(player, _config);
             var refreshToken = await _authRepository.GenerateRefreshTokenAsync(player);
             var response = new LoginResponseDto
@@ -52,7 +52,7 @@ namespace WordBattleGame.Controllers
                 },
                 RefreshToken = refreshToken?.Token ?? string.Empty
             };
-            return Ok(response);
+            return Ok(new ApiResponse<LoginResponseDto>(response, "Login success", 200));
         }
 
         [HttpPost("refresh")]
@@ -62,8 +62,8 @@ namespace WordBattleGame.Controllers
         {
             var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(dto.RefreshToken);
             if (token == null)
-                return Unauthorized(error);
-            return Ok(new { token, refreshToken = newRefreshToken });
+                return Unauthorized(new ErrorResponseDto { Message = error ?? "Invalid refresh token.", Code = 401 });
+            return Ok(new ApiResponse<object>(new { token, refreshToken = newRefreshToken }, "Refresh token success", 200));
         }
 
         [HttpPut("update-profile/{id}")]
@@ -73,7 +73,7 @@ namespace WordBattleGame.Controllers
         )
         {
             var success = await _authRepository.UpdateProfileAsync(id, dto);
-            if (!success) return NotFound();
+            if (!success) return NotFound(new ErrorResponseDto { Message = "Player not found.", Code = 404 });
             return NoContent();
         }
 
@@ -84,7 +84,7 @@ namespace WordBattleGame.Controllers
         )
         {
             var (success, error) = await _authRepository.ChangePasswordAsync(id, dto);
-            if (!success) return BadRequest(error);
+            if (!success) return BadRequest(new ErrorResponseDto { Message = error ?? "Change password failed.", Code = 400 });
             return NoContent();
         }
     }

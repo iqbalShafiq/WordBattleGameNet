@@ -32,14 +32,14 @@ namespace WordBattleGame.Controllers
                     Draw = p.Stats.Draw
                 }
             });
-            return Ok(result);
+            return Ok(new ApiResponse<IEnumerable<PlayerDetailDto>>(result, "Get players success", 200));
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<PlayerDetailDto>> GetPlayer(string id)
         {
             var player = await _playerRepository.GetByIdAsync(id);
-            if (player == null) return NotFound();
+            if (player == null) return NotFound(new ErrorResponseDto { Message = "Player not found.", Code = 404 });
             var result = new PlayerDetailDto
             {
                 Id = player.Id,
@@ -55,7 +55,7 @@ namespace WordBattleGame.Controllers
                     Draw = player.Stats.Draw
                 }
             };
-            return Ok(result);
+            return Ok(new ApiResponse<PlayerDetailDto>(result, "Get player success", 200));
         }
     }
 }

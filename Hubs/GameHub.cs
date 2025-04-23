@@ -100,6 +100,7 @@ namespace WordBattleGame.Hubs
             var expectedPlayers = await _gameRepository.GetExpectedPlayersAsync(gameId);
             if (GameJoinStatus[gameId].Count == expectedPlayers.ToList().Count)
             {
+                await _playerRepository.UpdateStatsAsync([.. expectedPlayers.Select(p => p.Id)]);
                 await Clients.Group(gameId).SendAsync("AllPlayersJoined", gameId);
                 await StartRound(gameId, 1, "en", "easy");
             }

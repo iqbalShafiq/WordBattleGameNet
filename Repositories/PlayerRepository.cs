@@ -22,6 +22,14 @@ namespace WordBattleGame.Repositories
             return await _context.Players.Where(p => playerIds.Contains(p.Id)).ToListAsync();
         }
 
+        public async Task UpdateStatsAsync(IEnumerable<string> playerIds)
+        {
+            await _context.PlayerStats
+                .Where(ps => playerIds.Contains(ps.PlayerId))
+                .ForEachAsync(ps => ps.TotalGames++);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<PlayerStats> UpdateStatsAsync(string playerId, int score, bool? isWin)
         {
             var playerStats = await _context.PlayerStats.FindAsync(playerId) ?? throw new Exception("Player stats not found");

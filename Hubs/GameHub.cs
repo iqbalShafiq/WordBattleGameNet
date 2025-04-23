@@ -37,7 +37,7 @@ namespace WordBattleGame.Hubs
                 if (!MatchMakingQueue.Contains(playerId))
                     MatchMakingQueue.Add(playerId);
             }
-            await Clients.Caller.SendAsync("MatchMakingJoined", playerId);
+            await Clients.Caller.SendAsync("MatchMakingJoined", new MatchMakingJoinedDto { PlayerId = playerId });
 
             string[]? matchedPlayers = null;
             lock (QueueLock)
@@ -57,7 +57,7 @@ namespace WordBattleGame.Hubs
                 var players = _playerRepository.GetByIdsAsync(matchedPlayers).Result;
                 if (players == null || players.Count == 0)
                 {
-                    await Clients.Caller.SendAsync("MatchMakingFailed", "No players found.");
+                    await Clients.Caller.SendAsync("MatchMakingFailed", new MatchMakingFailedDto { Message = "No players found." });
                     return;
                 }
 
@@ -74,10 +74,10 @@ namespace WordBattleGame.Hubs
 
                 foreach (var pid in matchedPlayers)
                 {
-                    await Clients.User(pid).SendAsync("MatchFound", new
+                    await Clients.User(pid).SendAsync("MatchFound", new MatchFoundDto
                     {
-                        gameId,
-                        matchedPlayers
+                        GameId = gameId,
+                        MatchedPlayers = [.. matchedPlayers]
                     });
                 }
             }
@@ -101,15 +101,15 @@ namespace WordBattleGame.Hubs
             if (GameJoinStatus[gameId].Count == expectedPlayers.ToList().Count)
             {
                 await _playerRepository.UpdateStatsAsync([.. expectedPlayers.Select(p => p.Id)]);
-                await Clients.Group(gameId).SendAsync("AllPlayersJoined", gameId);
-                await StartRound(gameId, 1, "en", "easy");
+                await Clients.Group(gameId).SendAsync("AllPlayersJoined", new AllPlayersJoinedDto { GameId = gameId });
+                await StartRound(gameId, 1, "en", "very very hard");
             }
         }
 
         public async Task LeaveMatchMaking(string playerId)
         {
             MatchMakingQueue.Remove(playerId);
-            await Clients.Caller.SendAsync("MatchMakingLeft", playerId);
+            await Clients.Caller.SendAsync("MatchMakingLeft", new MatchMakingJoinedDto { PlayerId = playerId });
         }
 
         public async Task StartRound(string gameId, int roundNumber, string language, string difficulty)
@@ -141,7 +141,12 @@ namespace WordBattleGame.Hubs
             if (round == null) return;
 
             var isCorrect = string.Equals(answer, round.TrueWord, StringComparison.OrdinalIgnoreCase);
-            await Clients.Group(round.GameId).SendAsync("AnswerSubmitted", playerId, answer, isCorrect);
+            await Clients.Group(round.GameId).SendAsync("AnswerSubmitted", new AnswerSubmittedDto
+            {
+                PlayerId = playerId,
+                Answer = answer,
+                IsCorrect = isCorrect
+            });
 
             if (isCorrect)
             {
@@ -158,28 +163,43 @@ namespace WordBattleGame.Hubs
                             await _playerRepository.UpdateStatsAsync(player.Id, 0, false);
                         }
                     }
-                    await Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
+                    await Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
+                    {
+                        Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
+                            Id = p.Id,
+                            Name = p.Name,
+                            Email = p.Email
+                        })]
+                    });
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, round.GameId);
                 }
-                await Clients.User(playerId).SendAsync("CorrectAnswer", round.TrueWord);
-                await Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, playerId);
+                await Clients.User(playerId).SendAsync("CorrectAnswer", new CorrectAnswerDto { TrueWord = round.TrueWord });
+                await Clients.Group(round.GameId).SendAsync("RoundEnded", new RoundEndedDto
+                {
+                    TrueWord = round.TrueWord,
+                    WinnerPlayerId = playerId
+                });
                 await StartRound(round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
             }
             else
             {
-                await Clients.User(playerId).SendAsync("IncorrectAnswer", round.TrueWord);
+                await Clients.User(playerId).SendAsync("IncorrectAnswer", new IncorrectAnswerDto { TrueWord = round.TrueWord });
             }
         }
 
         public async Task SendChat(string gameId, string playerId, string message)
         {
-            await Clients.Group(gameId).SendAsync("ReceiveChat", playerId, message);
+            await Clients.Group(gameId).SendAsync("ReceiveChat", new ChatMessageDto
+            {
+                PlayerId = playerId,
+                Message = message
+            });
         }
 
         public async Task LeaveGame(string gameId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameId);
-            await Clients.Group(gameId).SendAsync("PlayerLeft", Context.ConnectionId);
+            await Clients.Group(gameId).SendAsync("PlayerLeft", new PlayerLeftDto { ConnectionId = Context.ConnectionId });
         }
     }
 }

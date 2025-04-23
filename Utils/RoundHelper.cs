@@ -49,7 +49,12 @@ namespace WordBattleGame.Utils
                 Language = language,
             };
             await roundRepository.AddAsync(newRound);
-            await hubContext.Clients.Group(gameId).SendAsync("RoundStarted", newRound.Id, newGeneratedWord, targetWord, roundNumber);
+            await hubContext.Clients.Group(gameId).SendAsync("RoundStarted", new RoundStartedDto {
+                RoundId = newRound.Id,
+                GeneratedWord = newGeneratedWord,
+                TrueWord = targetWord,
+                RoundNumber = roundNumber
+            });
 
             // Buat CTS baru untuk round ini
             var cts = new CancellationTokenSource();
@@ -112,7 +117,11 @@ namespace WordBattleGame.Utils
             logger.LogInformation($"Round {roundId} ended.");
 
             if (round == null) return;
-            await hubContext.Clients.Group(round.GameId).SendAsync("RoundEnded", round.TrueWord, null);
+            await hubContext.Clients.Group(round.GameId).SendAsync("RoundEnded", new RoundEndedDto
+                {
+                    TrueWord = round.TrueWord,
+                    WinnerPlayerId = null
+                });
 
             logger.LogInformation($"Round {round.RoundNumber} ended for game {round.GameId}.");
 
@@ -122,7 +131,14 @@ namespace WordBattleGame.Utils
             }
             else if (round.Game != null && round.RoundNumber == round.Game.MaxRound)
             {
-                await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", round.Game.Players);
+                await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
+                    {
+                        Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
+                            Id = p.Id,
+                            Name = p.Name,
+                            Email = p.Email
+                        })]
+                    });
             }
             else
             {

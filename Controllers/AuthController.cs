@@ -6,7 +6,8 @@ using WordBattleGame.Repositories;
 namespace WordBattleGame.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v1/[controller]")]
+    [Produces("application/json")]
     public class AuthController(IAuthRepository authRepository, IConfiguration config) : ControllerBase
     {
         private readonly IAuthRepository _authRepository = authRepository;

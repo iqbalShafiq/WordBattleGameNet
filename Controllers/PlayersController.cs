@@ -6,7 +6,8 @@ using WordBattleGame.Repositories;
 namespace WordBattleGame.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v1/[controller]")]
+    [Produces("application/json")]
     [Authorize]
     public class PlayersController(IPlayerRepository playerRepository) : ControllerBase
     {

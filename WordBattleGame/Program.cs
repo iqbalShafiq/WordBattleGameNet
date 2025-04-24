@@ -7,8 +7,6 @@ using Serilog;
 using Serilog.Formatting.Json;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Tambahkan ini sebelum konfigurasi lain
 DotNetEnv.Env.Load();
 
 // Add services to the container.
@@ -88,17 +86,17 @@ builder.Services.AddCors(options =>
         policy.AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()
-              .WithOrigins("http://localhost:3000");
+              .WithOrigins("http://localhost:3000", "http://localhost:5173");
     });
 });
 
 var app = builder.Build();
-
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+app.UseMiddleware<WordBattleGame.JwtCookieMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

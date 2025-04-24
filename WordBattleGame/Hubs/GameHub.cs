@@ -13,7 +13,7 @@ namespace WordBattleGame.Hubs
         IWordGeneratorService wordGeneratorService,
         IPlayerRepository playerRepository,
         IHubContext<GameHub> hubContext,
-        IServiceScopeFactory serviceScopeFactory // tambahkan ini
+        IServiceScopeFactory serviceScopeFactory
     ) : Hub
     {
         private readonly IHubContext<GameHub> _hubContext = hubContext;
@@ -31,6 +31,9 @@ namespace WordBattleGame.Hubs
 
         public async Task JoinMatchMaking(string playerId)
         {
+            _logger.LogInformation("GameHub Context.User.Identity.IsAuthenticated: {IsAuthenticated}, Name: {Name}",
+                Context.User?.Identity?.IsAuthenticated,
+                Context.User?.Identity?.Name);
             _logger.LogInformation($"Player {playerId} joined matchmaking.");
             lock (QueueLock)
             {
@@ -55,6 +58,7 @@ namespace WordBattleGame.Hubs
             if (matchedPlayerIds != null)
             {
                 var players = _playerRepository.GetByIdsAsync(matchedPlayerIds).Result;
+                _logger.LogInformation($"Matched players details: {string.Join(", ", players.Select(p => p.Name))}");
                 if (players == null || players.Count == 0)
                 {
                     await Clients.Caller.SendAsync("MatchMakingFailed", new MatchMakingFailedDto { Message = "No players found." });
@@ -74,6 +78,7 @@ namespace WordBattleGame.Hubs
 
                 foreach (var pid in matchedPlayerIds)
                 {
+                    _logger.LogInformation($"Sending game ID {gameId} to player {pid}.");
                     await Clients.User(pid).SendAsync("MatchFound", new MatchFoundDto
                     {
                         GameId = gameId,

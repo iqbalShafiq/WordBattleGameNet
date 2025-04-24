@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WordBattleGame.Models;
 using WordBattleGame.Extensions;
 using WordBattleGame.Repositories;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WordBattleGame.Controllers
 {
@@ -39,7 +40,29 @@ namespace WordBattleGame.Controllers
             if (player == null)
                 return Unauthorized(new ErrorResponseDto { Message = error ?? "Login failed.", Code = 401 });
             var token = JwtHelper.GenerateToken(player, _config);
+
             var refreshToken = await _authRepository.GenerateRefreshTokenAsync(player);
+            if (refreshToken == null)
+                return Unauthorized(new ErrorResponseDto { Message = "Failed to generate refresh token.", Code = 401 });
+
+            // Set access token cookie
+            Response.Cookies.Append("access_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddMinutes(15),
+            });
+
+            // Set refresh token cookie
+            Response.Cookies.Append("refresh_token", refreshToken.Token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(7),
+            });
+
             var response = new LoginResponseDto
             {
                 Token = token,
@@ -56,17 +79,39 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPost("refresh")]
-        public async Task<ActionResult<object>> RefreshToken(
-            [FromBody] RefreshTokenRequestDto dto
-        )
+        public async Task<ActionResult<object>> RefreshToken()
         {
-            var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(dto.RefreshToken);
-            if (token == null)
+            var refreshToken = Request.Cookies["refresh_token"];
+            if (string.IsNullOrEmpty(refreshToken))
+                return Unauthorized(new ErrorResponseDto { Message = "Refresh token not found.", Code = 401 });
+                
+            var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(refreshToken);
+            if (token == null || newRefreshToken == null)
                 return Unauthorized(new ErrorResponseDto { Message = error ?? "Invalid refresh token.", Code = 401 });
+
+            // Set access token cookie
+            Response.Cookies.Append("access_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddMinutes(15),
+            });
+
+            // Set refresh token cookie
+            Response.Cookies.Append("refresh_token", newRefreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(7),
+            });
+
             return Ok(new ApiResponse<object>(new { token, refreshToken = newRefreshToken }, "Refresh token success", 200));
         }
 
         [HttpPut("update-profile/{id}")]
+        [Authorize]
         public async Task<IActionResult> UpdateProfile(
             [FromRoute] string id,
             [FromBody] UpdateProfileDto dto
@@ -78,6 +123,7 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpPut("change-password/{id}")]
+        [Authorize]
         public async Task<IActionResult> ChangePassword(
             [FromRoute] string id,
             [FromBody] ChangePasswordDto dto

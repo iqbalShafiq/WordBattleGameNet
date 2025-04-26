@@ -131,5 +131,28 @@ namespace WordBattleGame.Repositories
             Console.WriteLine($"[ConfirmEmail] Email confirmed: {email}");
             return true;
         }
+
+        public async Task<bool> GeneratePasswordResetTokenAsync(string email)
+        {
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.Email == email);
+            if (player == null) return false;
+            player.EmailConfirmationToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            player.EmailConfirmationTokenExpiry = DateTime.UtcNow.AddHours(1);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> ResetPasswordAsync(string email, string token, string newPassword)
+        {
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.Email == email);
+            if (player == null) return false;
+            if (player.EmailConfirmationToken != token || player.EmailConfirmationTokenExpiry < DateTime.UtcNow)
+                return false;
+            player.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            player.EmailConfirmationToken = null;
+            player.EmailConfirmationTokenExpiry = null;
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

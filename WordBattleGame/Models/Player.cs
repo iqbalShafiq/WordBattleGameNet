@@ -9,6 +9,9 @@ namespace WordBattleGame.Models
         public required string Name { get; set; }
         public required string Email { get; set; }
         public required string PasswordHash { get; set; }
+        public bool IsEmailConfirmed { get; set; } = false;
+        public string? EmailConfirmationToken { get; set; }
+        public DateTime? EmailConfirmationTokenExpiry { get; set; }
         public DateTime CreatedAt { get; set; }
         public PlayerStats? Stats { get; set; }
         public ICollection<Game> Games { get; set; } = new List<Game>();

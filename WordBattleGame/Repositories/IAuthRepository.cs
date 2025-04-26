@@ -10,5 +10,6 @@ namespace WordBattleGame.Repositories
         Task<(string? token, string? refreshToken, string? error)> RefreshTokenAsync(string refreshToken);
         Task<bool> UpdateProfileAsync(string id, UpdateProfileDto dto);
         Task<(bool success, string? error)> ChangePasswordAsync(string id, ChangePasswordDto dto);
+        Task<bool> ConfirmEmailAsync(string email, string token);
     }
 }

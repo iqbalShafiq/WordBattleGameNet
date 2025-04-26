@@ -3,16 +3,18 @@ using WordBattleGame.Models;
 using WordBattleGame.Extensions;
 using WordBattleGame.Repositories;
 using Microsoft.AspNetCore.Authorization;
+using WordBattleGame.Services;
 
 namespace WordBattleGame.Controllers
 {
     [ApiController]
     [Route("api/v1/[controller]")]
     [Produces("application/json")]
-    public class AuthController(IAuthRepository authRepository, IConfiguration config) : ControllerBase
+    public class AuthController(IAuthRepository authRepository, IConfiguration config, IEmailService emailService) : ControllerBase
     {
         private readonly IAuthRepository _authRepository = authRepository;
         private readonly IConfiguration _config = config;
+        private readonly IEmailService _emailService = emailService;
 
         [HttpPost("register")]
         public async Task<ActionResult<PlayerDto>> Register(
@@ -28,7 +30,12 @@ namespace WordBattleGame.Controllers
                 Email = player.Email,
                 CreatedAt = player.CreatedAt
             };
-            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success", 201));
+
+            // Generate confirmation link with token
+            var token = player.EmailConfirmationToken ?? string.Empty;
+            var confirmationLink = $"{Request.Scheme}://{Request.Host}/api/v1/auth/confirm-email?email={player.Email}&token={Uri.EscapeDataString(token)}";
+            await _emailService.SendConfirmationEmailAsync(player.Email, confirmationLink);
+            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success, please check your email to confirm.", 201));
         }
 
         [HttpPost("login")]
@@ -71,6 +78,7 @@ namespace WordBattleGame.Controllers
                     Id = player.Id,
                     Name = player.Name,
                     Email = player.Email,
+                    IsEmailConfirmed = player.IsEmailConfirmed,
                     CreatedAt = player.CreatedAt
                 },
                 RefreshToken = refreshToken?.Token ?? string.Empty
@@ -142,6 +150,37 @@ namespace WordBattleGame.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized(new ErrorResponseDto { Message = "User not authenticated.", Code = 401 });
             return Ok(new ApiResponse<object>(null, "Authenticated", 200));
+        }
+
+        [HttpPost("logout")]
+        [Authorize]
+        public IActionResult Logout()
+        {
+            Response.Cookies.Append("access_token", "", new CookieOptions
+            {
+                Expires = DateTime.UtcNow.AddDays(-1),
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict
+            });
+            Response.Cookies.Append("refresh_token", "", new CookieOptions
+            {
+                Expires = DateTime.UtcNow.AddDays(-1),
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict
+            });
+            return Ok(new ApiResponse<object>(null, "Logout success", 200));
+        }
+
+        [HttpGet("confirm-email")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ConfirmEmail([FromQuery] string email, [FromQuery] string token)
+        {
+            var success = await _authRepository.ConfirmEmailAsync(email, token);
+            if (!success)
+                return BadRequest(new ErrorResponseDto { Message = "Invalid, expired, or already confirmed email.", Code = 400 });
+            return Ok(new ApiResponse<object>(null, "Email confirmed successfully.", 200));
         }
     }
 }

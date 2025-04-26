@@ -14,13 +14,17 @@ namespace WordBattleGame.Repositories
         public async Task<Player?> RegisterAsync(PlayerRegisterDto dto)
         {
             if (await _context.Players.AnyAsync(p => p.Email == dto.Email)) return null;
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            var expiry = DateTime.UtcNow.AddHours(24);
             var player = new Player
             {
                 Id = Guid.NewGuid().ToString(),
                 Name = dto.Name,
                 Email = dto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                EmailConfirmationToken = token,
+                EmailConfirmationTokenExpiry = expiry
             };
             _context.Players.Add(player);
 
@@ -96,6 +100,36 @@ namespace WordBattleGame.Repositories
             player.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             await _context.SaveChangesAsync();
             return (true, null);
+        }
+        public async Task<bool> ConfirmEmailAsync(string email, string token)
+        {
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.Email == email);
+            if (player == null)
+            {
+                Console.WriteLine($"[ConfirmEmail] Player not found: {email}");
+                return false;
+            }
+            if (player.IsEmailConfirmed)
+            {
+                Console.WriteLine($"[ConfirmEmail] Email already confirmed: {email}");
+                return false;
+            }
+            if (player.EmailConfirmationToken != token)
+            {
+                Console.WriteLine($"[ConfirmEmail] Token mismatch for {email}. Expected: {player.EmailConfirmationToken}, Got: {token}");
+                return false;
+            }
+            if (player.EmailConfirmationTokenExpiry < DateTime.UtcNow)
+            {
+                Console.WriteLine($"[ConfirmEmail] Token expired for {email}. Expiry: {player.EmailConfirmationTokenExpiry}, Now: {DateTime.UtcNow}");
+                return false;
+            }
+            player.IsEmailConfirmed = true;
+            player.EmailConfirmationToken = null;
+            player.EmailConfirmationTokenExpiry = null;
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"[ConfirmEmail] Email confirmed: {email}");
+            return true;
         }
     }
 }

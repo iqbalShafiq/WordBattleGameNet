@@ -22,6 +22,7 @@ namespace WordBattleGame.Extensions
             services.AddScoped<IRoundRepository, RoundRepository>();
             services.AddScoped<IWordHistoryRepository, WordHistoryRepository>();
             services.AddScoped<IWordGeneratorService, WordGeneratorService>();
+            services.AddScoped<IEmailService, EmailService>();
             return services;
         }
     }

@@ -1,15 +1,9 @@
 namespace WordBattleGame.Models
 {
-    public class ApiResponse<T>
+    public class ApiResponse<T>(T? data, string? message = null, int code = 200)
     {
-        public T Data { get; set; }
-        public string? Message { get; set; }
-        public int Code { get; set; }
-        public ApiResponse(T data, string? message = null, int code = 200)
-        {
-            Data = data;
-            Message = message;
-            Code = code;
-        }
+        public T? Data { get; set; } = data;
+        public string? Message { get; set; } = message;
+        public int Code { get; set; } = code;
     }
 }

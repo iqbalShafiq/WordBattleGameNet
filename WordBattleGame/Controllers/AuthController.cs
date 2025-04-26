@@ -84,7 +84,7 @@ namespace WordBattleGame.Controllers
             var refreshToken = Request.Cookies["refresh_token"];
             if (string.IsNullOrEmpty(refreshToken))
                 return Unauthorized(new ErrorResponseDto { Message = "Refresh token not found.", Code = 401 });
-                
+
             var (token, newRefreshToken, error) = await _authRepository.RefreshTokenAsync(refreshToken);
             if (token == null || newRefreshToken == null)
                 return Unauthorized(new ErrorResponseDto { Message = error ?? "Invalid refresh token.", Code = 401 });
@@ -119,7 +119,7 @@ namespace WordBattleGame.Controllers
         {
             var success = await _authRepository.UpdateProfileAsync(id, dto);
             if (!success) return NotFound(new ErrorResponseDto { Message = "Player not found.", Code = 404 });
-            return NoContent();
+            return Ok(new ApiResponse<object>(null, "Profile updated", 200));
         }
 
         [HttpPut("change-password/{id}")]
@@ -131,7 +131,17 @@ namespace WordBattleGame.Controllers
         {
             var (success, error) = await _authRepository.ChangePasswordAsync(id, dto);
             if (!success) return BadRequest(new ErrorResponseDto { Message = error ?? "Change password failed.", Code = 400 });
-            return NoContent();
+            return Ok(new ApiResponse<object>(null, "Password changed", 200));
+        }
+
+        [HttpGet("me")]
+        [Authorize]
+        public IActionResult Me()
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new ErrorResponseDto { Message = "User not authenticated.", Code = 401 });
+            return Ok(new ApiResponse<object>(null, "Authenticated", 200));
         }
     }
 }

@@ -33,7 +33,7 @@ namespace WordBattleGame.Controllers
 
             // Generate confirmation link with token
             var token = player.EmailConfirmationToken ?? string.Empty;
-            var confirmationLink = $"{Request.Scheme}://{Request.Host}/api/v1/auth/confirm-email?email={player.Email}&token={Uri.EscapeDataString(token)}";
+            var confirmationLink = $"{Request.Scheme}://localhost:5173/login?email={player.Email}&confirmationToken={Uri.EscapeDataString(token)}";
             await _emailService.SendConfirmationEmailAsync(player.Email, confirmationLink);
             return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success, please check your email to confirm.", 201));
         }

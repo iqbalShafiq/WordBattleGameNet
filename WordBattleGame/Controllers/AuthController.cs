@@ -190,14 +190,12 @@ namespace WordBattleGame.Controllers
             var found = await _authRepository.GeneratePasswordResetTokenAsync(dto.Email);
             if (!found)
                 return NotFound(new ErrorResponseDto { Message = "Email not found.", Code = 404 });
-            var player = await _authRepository.LoginAsync(new PlayerLoginDto { Email = dto.Email, Password = "" });
-            // Ambil token terbaru dari database
-            var dbPlayer = player.player;
-            if (dbPlayer == null)
+            var player = await _authRepository.GetByEmailAsync(dto.Email);
+            if (player == null)
                 return NotFound(new ErrorResponseDto { Message = "Email not found.", Code = 404 });
-            var token = dbPlayer.EmailConfirmationToken ?? string.Empty;
-            var confirmationLink = $"{Request.Scheme}://localhost:5173/reset-password?email={dbPlayer.Email}&token={Uri.EscapeDataString(token)}";
-            await _emailService.SendConfirmationEmailAsync(dbPlayer.Email, confirmationLink);
+            var token = player.EmailConfirmationToken ?? string.Empty;
+            var confirmationLink = $"{Request.Scheme}://localhost:5173/reset-password?email={player.Email}&token={Uri.EscapeDataString(token)}";
+            await _emailService.SendConfirmationEmailAsync(player.Email, confirmationLink);
             return Ok(new ApiResponse<object>(null, "Password reset link sent to your email.", 200));
         }
 

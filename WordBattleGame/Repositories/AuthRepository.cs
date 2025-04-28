@@ -154,5 +154,10 @@ namespace WordBattleGame.Repositories
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<Player?> GetByEmailAsync(string email)
+        {
+            return await _context.Players.FirstOrDefaultAsync(p => p.Email == email);
+        }
     }
 }

@@ -13,5 +13,6 @@ namespace WordBattleGame.Repositories
         Task<bool> ConfirmEmailAsync(string email, string token);
         Task<bool> GeneratePasswordResetTokenAsync(string email);
         Task<bool> ResetPasswordAsync(string email, string token, string newPassword);
+        Task<Player?> GetByEmailAsync(string email);
     }
 }

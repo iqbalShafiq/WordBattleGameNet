@@ -17,7 +17,7 @@ namespace WordBattleGame.Utils
             int roundNumber,
             string language,
             string difficulty,
-            int countdownSeconds = 5,
+            int countdownSeconds = 60,
             CancellationToken? externalToken = null)
         {
             using var scope = scopeFactory.CreateScope();
@@ -49,7 +49,8 @@ namespace WordBattleGame.Utils
                 Language = language,
             };
             await roundRepository.AddAsync(newRound);
-            await hubContext.Clients.Group(gameId).SendAsync("RoundStarted", new RoundStartedDto {
+            await hubContext.Clients.Group(gameId).SendAsync("RoundStarted", new RoundStartedDto
+            {
                 RoundId = newRound.Id,
                 GeneratedWord = newGeneratedWord,
                 TrueWord = targetWord,
@@ -118,10 +119,10 @@ namespace WordBattleGame.Utils
 
             if (round == null) return;
             await hubContext.Clients.Group(round.GameId).SendAsync("RoundEnded", new RoundEndedDto
-                {
-                    TrueWord = round.TrueWord,
-                    WinnerPlayerId = null
-                });
+            {
+                TrueWord = round.TrueWord,
+                WinnerPlayerId = null
+            });
 
             logger.LogInformation($"Round {round.RoundNumber} ended for game {round.GameId}.");
 
@@ -132,13 +133,13 @@ namespace WordBattleGame.Utils
             else if (round.Game != null && round.RoundNumber == round.Game.MaxRound)
             {
                 await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
-                    {
-                        Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
+                {
+                    Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
                             Id = p.Id,
                             Name = p.Name,
                             Email = p.Email
                         })]
-                    });
+                });
             }
             else
             {

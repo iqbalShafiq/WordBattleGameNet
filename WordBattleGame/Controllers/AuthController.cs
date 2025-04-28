@@ -34,7 +34,7 @@ namespace WordBattleGame.Controllers
             // Generate confirmation link with token
             var token = player.EmailConfirmationToken ?? string.Empty;
             var confirmationLink = $"{Request.Scheme}://localhost:5173/login?email={player.Email}&confirmationToken={Uri.EscapeDataString(token)}";
-            await _emailService.SendConfirmationEmailAsync(player.Email, confirmationLink);
+            await _emailService.SendEmailAsync("Email Confirmation", "Please confirm your email address by clicking the link below", player.Email, confirmationLink);
             return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success, please check your email to confirm.", 201));
         }
 
@@ -195,7 +195,7 @@ namespace WordBattleGame.Controllers
                 return NotFound(new ErrorResponseDto { Message = "Email not found.", Code = 404 });
             var token = player.EmailConfirmationToken ?? string.Empty;
             var confirmationLink = $"{Request.Scheme}://localhost:5173/reset-password?email={player.Email}&token={Uri.EscapeDataString(token)}";
-            await _emailService.SendConfirmationEmailAsync(player.Email, confirmationLink);
+            await _emailService.SendEmailAsync("Password Reset Request", "Please reset your password using the link below", player.Email, confirmationLink);
             return Ok(new ApiResponse<object>(null, "Password reset link sent to your email.", 200));
         }
 

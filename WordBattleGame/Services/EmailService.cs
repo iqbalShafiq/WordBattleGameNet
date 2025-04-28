@@ -3,24 +3,19 @@ using MimeKit;
 
 namespace WordBattleGame.Services
 {
-    public interface IEmailService
-    {
-        Task SendConfirmationEmailAsync(string toEmail, string confirmationLink);
-    }
-
     public class EmailService(IConfiguration config) : IEmailService
     {
         private readonly IConfiguration _config = config;
 
-        public async Task SendConfirmationEmailAsync(string toEmail, string confirmationLink)
+        public async Task SendEmailAsync(string subject, string content, string toEmail, string confirmationLink)
         {
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("WordBattle", _config["Email:From"]));
             message.To.Add(MailboxAddress.Parse(toEmail));
-            message.Subject = "Konfirmasi Email WordBattle";
+            message.Subject = subject;
             message.Body = new TextPart("plain")
             {
-                Text = $"Klik link berikut untuk konfirmasi email: {confirmationLink}"
+                Text = $"{content}:\n{confirmationLink}"
             };
 
             using var client = new SmtpClient();

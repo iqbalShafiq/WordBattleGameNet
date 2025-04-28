@@ -1,7 +1,7 @@
-namespace YourNamespace.Services
+namespace WordBattleGame.Services
 {
     public interface IEmailService
     {
-        Task SendConfirmationEmailAsync(string toEmail, string confirmationLink);
+        Task SendEmailAsync(string subject, string content, string toEmail, string confirmationLink);
     }
 }

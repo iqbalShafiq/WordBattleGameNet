@@ -32,7 +32,7 @@ namespace WordBattleGame.Repositories
 
         public async Task<PlayerStats> UpdateStatsAsync(string playerId, int score, bool? isWin)
         {
-            var playerStats = await _context.PlayerStats.FindAsync(playerId) ?? throw new Exception("Player stats not found");
+            var playerStats = await EnsurePlayerStatsExistsAsync(playerId);
             playerStats.TotalScore += score;
             if (isWin == null) playerStats.Draw++;
             else
@@ -40,8 +40,28 @@ namespace WordBattleGame.Repositories
                 if ((bool)isWin) playerStats.Win++;
                 else playerStats.Lose++;
             }
-
             await _context.SaveChangesAsync();
+            return playerStats;
+        }
+
+        async Task<PlayerStats> EnsurePlayerStatsExistsAsync(string playerId)
+        {
+            var playerStats = await _context.PlayerStats.FirstOrDefaultAsync(ps => ps.PlayerId == playerId);
+            if (playerStats == null)
+            {
+                playerStats = new PlayerStats
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PlayerId = playerId,
+                    TotalGames = 0,
+                    TotalScore = 0,
+                    Win = 0,
+                    Lose = 0,
+                    Draw = 0
+                };
+                _context.PlayerStats.Add(playerStats);
+                await _context.SaveChangesAsync();
+            }
             return playerStats;
         }
     }

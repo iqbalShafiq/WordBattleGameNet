@@ -225,17 +225,12 @@ namespace WordBattleGame.Hubs
                     });
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, round.GameId);
                 }
-                await Clients.User(playerId).SendAsync("CorrectAnswer", new CorrectAnswerDto { TrueWord = round.TrueWord });
                 await Clients.Group(round.GameId).SendAsync("RoundEnded", new RoundEndedDto
                 {
                     TrueWord = round.TrueWord,
                     WinnerPlayerId = playerId
                 });
                 await StartRound(round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
-            }
-            else
-            {
-                await Clients.User(playerId).SendAsync("IncorrectAnswer", new IncorrectAnswerDto { TrueWord = round.TrueWord });
             }
         }
 

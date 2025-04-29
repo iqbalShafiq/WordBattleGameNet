@@ -117,8 +117,8 @@ namespace WordBattleGame.Hubs
                             lock (JoinGameTimeouts)
                             {
                                 JoinGameTimeouts.Remove(pid);
+                                _logger.LogInformation($"JoinGameTimeouts removed for player {pid}.");
                             }
-                            _logger.LogInformation($"JoinGameTimeouts removed for player {pid}.");
                         }
                     });
                 }
@@ -127,12 +127,16 @@ namespace WordBattleGame.Hubs
 
         public async Task JoinGame(string gameId, string playerId)
         {
-            // Batalkan timer join jika ada
-            if (JoinGameTimeouts.TryGetValue(playerId, out var cts))
+            lock (JoinGameTimeouts)
             {
-                cts.Cancel();
-                JoinGameTimeouts.Remove(playerId);
+                if (JoinGameTimeouts.TryGetValue(playerId, out var cts))
+                {
+                    cts.Cancel();
+                    JoinGameTimeouts.Remove(playerId);
+                    _logger.LogInformation($"[DEBUG] JoinGameTimeouts cancelled and removed for player {playerId} in JoinGame.");
+                }
             }
+
             await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
             lock (GameJoinStatus)
             {

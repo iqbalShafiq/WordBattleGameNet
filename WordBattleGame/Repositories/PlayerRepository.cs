@@ -10,11 +10,15 @@ namespace WordBattleGame.Repositories
 
         public async Task<IEnumerable<Player>> GetAllAsync()
         {
-            return await _context.Players.ToListAsync();
+            return await _context.Players
+                .Include(p => p.Stats)
+                .ToListAsync();
         }
         public async Task<Player?> GetByIdAsync(string id)
         {
-            return await _context.Players.FindAsync(id);
+            return await _context.Players
+                .Include(p => p.Stats)
+                .FirstOrDefaultAsync(p => p.Id == id);
         }
 
         public async Task<List<Player>> GetByIdsAsync(IEnumerable<string> playerIds)

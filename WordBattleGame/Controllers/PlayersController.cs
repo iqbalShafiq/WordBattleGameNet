@@ -36,26 +36,22 @@ namespace WordBattleGame.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<PlayerDetailDto>> GetPlayer(string id)
+        public async Task<ActionResult<PlayerStatsDto>> GetPlayerStats(string id)
         {
             var player = await _playerRepository.GetByIdAsync(id);
             if (player == null) return NotFound(new ErrorResponseDto { Message = "Player not found.", Code = 404 });
-            var result = new PlayerDetailDto
+            if (player.Stats == null) return NotFound(new ErrorResponseDto { Message = "Player stats not found.", Code = 404 });
+
+            var result = new PlayerStatsDto
             {
-                Id = player.Id,
-                Name = player.Name,
-                Email = player.Email,
-                CreatedAt = player.CreatedAt,
-                Stats = player.Stats == null ? null : new PlayerStatsDto
-                {
-                    TotalGames = player.Stats.TotalGames,
-                    TotalScore = player.Stats.TotalScore,
-                    Win = player.Stats.Win,
-                    Lose = player.Stats.Lose,
-                    Draw = player.Stats.Draw
-                }
+                TotalGames = player.Stats.TotalGames,
+                TotalScore = player.Stats.TotalScore,
+                Win = player.Stats.Win,
+                Lose = player.Stats.Lose,
+                Draw = player.Stats.Draw
             };
-            return Ok(new ApiResponse<PlayerDetailDto>(result, "Get player success", 200));
+
+            return Ok(new ApiResponse<PlayerStatsDto>(result, "Get player stats success", 200));
         }
     }
 }

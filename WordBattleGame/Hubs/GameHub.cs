@@ -10,7 +10,6 @@ namespace WordBattleGame.Hubs
         ILogger<GameHub> logger,
         IGameRepository gameRepository,
         IRoundRepository roundRepository,
-        IWordGeneratorService wordGeneratorService,
         IPlayerRepository playerRepository,
         IHubContext<GameHub> hubContext,
         IServiceScopeFactory serviceScopeFactory
@@ -21,20 +20,15 @@ namespace WordBattleGame.Hubs
         private readonly IGameRepository _gameRepository = gameRepository;
         private readonly IRoundRepository _roundRepository = roundRepository;
         private readonly IPlayerRepository _playerRepository = playerRepository;
-        private readonly IWordGeneratorService _wordGeneratorService = wordGeneratorService;
         private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
 
         private static readonly List<string> MatchMakingQueue = [];
-        private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = new();
+        private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = [];
         private static readonly Lock QueueLock = new();
-        private static readonly Dictionary<string, CancellationTokenSource> RoundCountdownTokens = [];
+        private static readonly Dictionary<string, CancellationTokenSource> JoinGameTimeouts = [];
 
         public async Task JoinMatchMaking(string playerId)
         {
-            _logger.LogInformation("GameHub Context.User.Identity.IsAuthenticated: {IsAuthenticated}, Name: {Name}",
-                Context.User?.Identity?.IsAuthenticated,
-                Context.User?.Identity?.Name);
-            _logger.LogInformation($"Player {playerId} joined matchmaking.");
             lock (QueueLock)
             {
                 if (!MatchMakingQueue.Contains(playerId))
@@ -84,12 +78,61 @@ namespace WordBattleGame.Hubs
                         GameId = gameId,
                         MatchedPlayerIds = [.. matchedPlayerIds]
                     });
+                    // Mulai timer 10 detik untuk join game
+                    var cts = new CancellationTokenSource();
+                    lock (JoinGameTimeouts)
+                    {
+                        JoinGameTimeouts[pid] = cts;
+                    }
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            _logger.LogInformation($"Waiting for player {pid} to join the game...");
+                            await Task.Delay(TimeSpan.FromSeconds(10), cts.Token);
+
+                            // Timeout: player belum JoinGame
+                            MatchMakingQueue.Remove(pid);
+                            _logger.LogInformation($"Player {pid} did not join the game in time.");
+
+                            await _hubContext.Clients.User(pid).SendAsync("MatchMakingFailed", new MatchMakingFailedDto { Message = "Timeout: you did not join the game in time." });
+                            _logger.LogInformation($"Player {pid} did not join the game in time 2.");
+                            // Broadcast ke lawan
+                            foreach (var other in matchedPlayerIds.Where(x => x != pid))
+                            {
+                                await _hubContext.Clients.User(other).SendAsync("MatchMakingFailed", new MatchMakingFailedDto { Message = $"Other player did not join in time." });
+                                _logger.LogInformation($"Player {pid} did not join the game in time.");
+                            }
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            _logger.LogInformation($"Player {pid} joined the game before timeout.");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"Error while waiting for player {pid} to join the game: {ex.Message}");
+                        }
+                        finally
+                        {
+                            lock (JoinGameTimeouts)
+                            {
+                                JoinGameTimeouts.Remove(pid);
+                            }
+                            _logger.LogInformation($"JoinGameTimeouts removed for player {pid}.");
+                        }
+                    });
                 }
             }
         }
 
         public async Task JoinGame(string gameId, string playerId)
         {
+            // Batalkan timer join jika ada
+            if (JoinGameTimeouts.TryGetValue(playerId, out var cts))
+            {
+                cts.Cancel();
+                JoinGameTimeouts.Remove(playerId);
+            }
             await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
             lock (GameJoinStatus)
             {
@@ -201,8 +244,9 @@ namespace WordBattleGame.Hubs
             });
         }
 
-        public async Task LeaveGame(string gameId)
+        public async Task LeaveGame(string gameId, string playerId)
         {
+            await _playerRepository.UpdateStatsAsync(playerId, 0, false);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameId);
             await Clients.Group(gameId).SendAsync("PlayerLeft", new PlayerLeftDto { ConnectionId = Context.ConnectionId });
         }

@@ -12,7 +12,8 @@ namespace WordBattleGame.Hubs
         IRoundRepository roundRepository,
         IPlayerRepository playerRepository,
         IHubContext<GameHub> hubContext,
-        IServiceScopeFactory serviceScopeFactory
+        IServiceScopeFactory serviceScopeFactory,
+        IPlayerAnswerHistoryRepository playerAnswerHistoryRepository
     ) : Hub
     {
         private readonly IHubContext<GameHub> _hubContext = hubContext;
@@ -21,11 +22,13 @@ namespace WordBattleGame.Hubs
         private readonly IRoundRepository _roundRepository = roundRepository;
         private readonly IPlayerRepository _playerRepository = playerRepository;
         private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
+        private readonly IPlayerAnswerHistoryRepository _playerAnswerHistoryRepository = playerAnswerHistoryRepository;
 
         private static readonly List<string> MatchMakingQueue = [];
         private static readonly Dictionary<string, HashSet<string>> GameJoinStatus = [];
         private static readonly Lock QueueLock = new();
         private static readonly Dictionary<string, CancellationTokenSource> JoinGameTimeouts = [];
+        public static readonly Dictionary<string, string> PlayerConnections = [];
 
         public async Task JoinMatchMaking(string playerId)
         {
@@ -127,6 +130,7 @@ namespace WordBattleGame.Hubs
 
         public async Task JoinGame(string gameId, string playerId)
         {
+            PlayerConnections[playerId] = Context.ConnectionId;
             lock (JoinGameTimeouts)
             {
                 if (JoinGameTimeouts.TryGetValue(playerId, out var cts))
@@ -154,7 +158,7 @@ namespace WordBattleGame.Hubs
             {
                 await _playerRepository.UpdateStatsAsync([.. expectedPlayers.Select(p => p.Id)]);
                 await Clients.Group(gameId).SendAsync("AllPlayersJoined", new AllPlayersJoinedDto { GameId = gameId });
-                await StartRound(gameId, 1, "en", "very very hard");
+                await StartRound(gameId, 1, "id", "very easy");
             }
         }
 
@@ -193,6 +197,18 @@ namespace WordBattleGame.Hubs
             if (round == null) return;
 
             var isCorrect = string.Equals(answer, round.TrueWord, StringComparison.OrdinalIgnoreCase);
+            var score = isCorrect ? round.TrueWord.Length : 0;
+            await _playerAnswerHistoryRepository.InsertAsync(new PlayerAnswerHistory
+            {
+                PlayerId = playerId,
+                GameId = round.GameId,
+                RoundId = roundId,
+                Word = answer,
+                Score = score,
+                IsCorrect = isCorrect,
+                Timestamp = DateTime.UtcNow
+            });
+
             await Clients.Group(round.GameId).SendAsync("AnswerSubmitted", new AnswerSubmittedDto
             {
                 PlayerId = playerId,
@@ -203,34 +219,7 @@ namespace WordBattleGame.Hubs
             if (isCorrect)
             {
                 RoundHelper.CancelCountdown(roundId);
-                if (round.Game.MaxRound == round.RoundNumber)
-                {
-                    var score = 1;
-                    await _playerRepository.UpdateStatsAsync(playerId, score, true);
-
-                    foreach (var player in round.Game.Players)
-                    {
-                        if (player.Id != playerId)
-                        {
-                            await _playerRepository.UpdateStatsAsync(player.Id, 0, false);
-                        }
-                    }
-                    await Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
-                    {
-                        Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
-                            Id = p.Id,
-                            Name = p.Name,
-                            Email = p.Email
-                        })]
-                    });
-                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, round.GameId);
-                }
-                await Clients.Group(round.GameId).SendAsync("RoundEnded", new RoundEndedDto
-                {
-                    TrueWord = round.TrueWord,
-                    WinnerPlayerId = playerId
-                });
-                await StartRound(round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
+                await EndRound(roundId);
             }
         }
 

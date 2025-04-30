@@ -17,7 +17,7 @@ namespace WordBattleGame.Utils
             int roundNumber,
             string language,
             string difficulty,
-            int countdownSeconds = 60,
+            int countdownSeconds = 5,
             CancellationToken? externalToken = null)
         {
             using var scope = scopeFactory.CreateScope();
@@ -114,7 +114,7 @@ namespace WordBattleGame.Utils
         {
             using var scope = scopeFactory.CreateScope();
             var roundRepository = scope.ServiceProvider.GetRequiredService<IRoundRepository>();
-            var round = await roundRepository.GetByIdAsync(roundId);
+            var round = await roundRepository.GetByIdWithGameAndPlayersAsync(roundId);
             logger.LogInformation($"Round {roundId} ended.");
 
             if (round == null) return;
@@ -128,18 +128,69 @@ namespace WordBattleGame.Utils
 
             if (round.Game != null && round.RoundNumber < round.Game.MaxRound)
             {
+                logger.LogInformation($"Starting next round {round.RoundNumber + 1} for game {round.GameId}.");
                 await StartRoundAsync(hubContext, scopeFactory, logger, round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
             }
             else if (round.Game != null && round.RoundNumber == round.Game.MaxRound)
             {
+                logger.LogInformation($"Game {round.GameId} ended. Calculating scores.");
+
+                // Score calculation and game end logic
+                var playerAnswerHistoryRepo = scope.ServiceProvider.GetRequiredService<IPlayerAnswerHistoryRepository>();
+                var allAnswers = await playerAnswerHistoryRepo.GetByGameIdAsync(round.GameId);
+                var playerScores = allAnswers
+                    .GroupBy(a => a.PlayerId)
+                    .Select(g => new { PlayerId = g.Key, TotalScore = g.Sum(a => a.Score) })
+                    .ToList();
+                var maxScore = playerScores.Max(x => x.TotalScore);
+
+                // Cek draw: jika semua pemain memiliki skor sama
+                bool isDraw = playerScores.All(x => x.TotalScore == maxScore) && playerScores.Count > 1;
+                var winners = isDraw
+                    ? []
+                    : playerScores.Where(x => x.TotalScore == maxScore).Select(x => x.PlayerId).ToList();
+
+                logger.LogInformation($"Game {round.GameId} ended. Winners: {string.Join(", ", winners)}.");
+
+                // Update player stats
+                var playerRepo = scope.ServiceProvider.GetRequiredService<IPlayerRepository>();
+                logger.LogInformation($"Updating player stats for game {round.GameId}.");
+                logger.LogInformation($"Total players: {round.Game.Players.Count}.");
+
+                foreach (var player in round.Game.Players)
+                {
+                    logger.LogInformation($"Updating stats for player {player.Name} ({player.Id}).");
+                    bool? isWin = null;
+                    if (winners.Count == 0) isWin = null;
+                    else { isWin = winners.Contains(player.Id); }
+
+                    logger.LogInformation($"Player {player.Name} ({player.Id}) score: {playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0}.");
+
+                    var playerScore = playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0;
+                    await playerRepo.UpdateStatsAsync(player.Id, playerScore, isWin);
+
+                    logger.LogInformation($"Player {player.Name} ({player.Id}) stats updated.");
+                }
+
+                // Send game end notification to all players
                 await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
                 {
                     Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
-                            Id = p.Id,
-                            Name = p.Name,
-                            Email = p.Email
-                        })]
+                        Id = p.Id,
+                        Name = p.Name,
+                        Email = p.Email
+                    })],
+                    WinnerPlayerIds = winners
                 });
+
+                // Remove players from the game group
+                foreach (var player in round.Game.Players)
+                {
+                    if (Hubs.GameHub.PlayerConnections.TryGetValue(player.Id, out var connectionId))
+                    {
+                        await hubContext.Groups.RemoveFromGroupAsync(connectionId, round.GameId);
+                    }
+                }
             }
             else
             {

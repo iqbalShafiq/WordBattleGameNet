@@ -35,7 +35,7 @@ namespace WordBattleGame.Controllers
             var token = player.EmailConfirmationToken ?? string.Empty;
             var confirmationLink = $"{Request.Scheme}://localhost:5173/login?email={player.Email}&confirmationToken={Uri.EscapeDataString(token)}";
             await _emailService.SendEmailAsync("Email Confirmation", "Please confirm your email address by clicking the link below", player.Email, confirmationLink);
-            return CreatedAtAction("GetPlayer", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success, please check your email to confirm.", 201));
+            return CreatedAtAction("GetPlayerStats", "Players", new { id = player.Id }, new ApiResponse<PlayerDto>(playerDto, "Register success, please check your email to confirm.", 201));
         }
 
         [HttpPost("login")]

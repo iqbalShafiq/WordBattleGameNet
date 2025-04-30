@@ -8,5 +8,6 @@ namespace WordBattleGame.Repositories
         Task<IEnumerable<Round>> GetAllAsync();
         Task AddAsync(Round round);
         Task UpdateAsync(Round round);
+        Task<Round?> GetByIdWithGameAndPlayersAsync(string id);
     }
 }

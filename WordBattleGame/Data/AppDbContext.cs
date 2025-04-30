@@ -11,5 +11,6 @@ namespace WordBattleGame.Data
         public DbSet<Game> Games { get; set; }
         public DbSet<Round> Rounds { get; set; }
         public DbSet<WordHistory> WordHistories { get; set; }
+        public DbSet<PlayerAnswerHistory> PlayerAnswerHistories { get; set; }
     }
 }

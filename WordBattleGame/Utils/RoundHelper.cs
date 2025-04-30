@@ -126,15 +126,8 @@ namespace WordBattleGame.Utils
 
             logger.LogInformation($"Round {round.RoundNumber} ended for game {round.GameId}.");
 
-            if (round.Game != null && round.RoundNumber < round.Game.MaxRound)
+            if (round.Game != null)
             {
-                logger.LogInformation($"Starting next round {round.RoundNumber + 1} for game {round.GameId}.");
-                await StartRoundAsync(hubContext, scopeFactory, logger, round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
-            }
-            else if (round.Game != null && round.RoundNumber == round.Game.MaxRound)
-            {
-                logger.LogInformation($"Game {round.GameId} ended. Calculating scores.");
-
                 // Score calculation and game end logic
                 var playerAnswerHistoryRepo = scope.ServiceProvider.GetRequiredService<IPlayerAnswerHistoryRepository>();
                 var allAnswers = await playerAnswerHistoryRepo.GetByGameIdAsync(round.GameId);
@@ -142,53 +135,78 @@ namespace WordBattleGame.Utils
                     .GroupBy(a => a.PlayerId)
                     .Select(g => new { PlayerId = g.Key, TotalScore = g.Sum(a => a.Score) })
                     .ToList();
-                var maxScore = playerScores.Max(x => x.TotalScore);
 
-                // Cek draw: jika semua pemain memiliki skor sama
-                bool isDraw = playerScores.All(x => x.TotalScore == maxScore) && playerScores.Count > 1;
-                var winners = isDraw
-                    ? []
-                    : playerScores.Where(x => x.TotalScore == maxScore).Select(x => x.PlayerId).ToList();
-
-                logger.LogInformation($"Game {round.GameId} ended. Winners: {string.Join(", ", winners)}.");
-
-                // Update player stats
-                var playerRepo = scope.ServiceProvider.GetRequiredService<IPlayerRepository>();
-                logger.LogInformation($"Updating player stats for game {round.GameId}.");
-                logger.LogInformation($"Total players: {round.Game.Players.Count}.");
-
-                foreach (var player in round.Game.Players)
+                // Send score to user
+                await hubContext.Clients.Group(round.GameId).SendAsync("GameScores", new GameScoreDto
                 {
-                    logger.LogInformation($"Updating stats for player {player.Name} ({player.Id}).");
-                    bool? isWin = null;
-                    if (winners.Count == 0) isWin = null;
-                    else { isWin = winners.Contains(player.Id); }
+                    PlayerScores = [.. round.Game.Players.Select(p => new PlayerScoreDto
+                    {
+                        PlayerId = p.Id,
+                        PlayerName = p.Name,
+                        TotalScore = playerScores
+                            .FirstOrDefault(x => x.PlayerId == p.Id)
+                            ?.TotalScore ?? 0
+                    })]
+                });
 
-                    logger.LogInformation($"Player {player.Name} ({player.Id}) score: {playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0}.");
 
-                    var playerScore = playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0;
-                    await playerRepo.UpdateStatsAsync(player.Id, playerScore, isWin);
 
-                    logger.LogInformation($"Player {player.Name} ({player.Id}) stats updated.");
+                if (round.RoundNumber < round.Game.MaxRound)
+                {
+                    logger.LogInformation($"Starting next round {round.RoundNumber + 1} for game {round.GameId}.");
+                    await StartRoundAsync(hubContext, scopeFactory, logger, round.GameId, round.RoundNumber + 1, round.Language, round.Difficulty);
                 }
-
-                // Send game end notification to all players
-                await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
+                else if (round.RoundNumber == round.Game.MaxRound)
                 {
-                    Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
+                    logger.LogInformation($"Game {round.GameId} ended. Calculating scores.");
+                    var maxScore = playerScores.Max(x => x.TotalScore);
+
+                    // Cek draw: jika semua pemain memiliki skor sama
+                    bool isDraw = playerScores.All(x => x.TotalScore == maxScore) && playerScores.Count > 1;
+                    var winners = isDraw
+                        ? []
+                        : playerScores.Where(x => x.TotalScore == maxScore).Select(x => x.PlayerId).ToList();
+
+                    logger.LogInformation($"Game {round.GameId} ended. Winners: {string.Join(", ", winners)}.");
+
+                    // Update player stats
+                    var playerRepo = scope.ServiceProvider.GetRequiredService<IPlayerRepository>();
+                    logger.LogInformation($"Updating player stats for game {round.GameId}.");
+                    logger.LogInformation($"Total players: {round.Game.Players.Count}.");
+
+                    foreach (var player in round.Game.Players)
+                    {
+                        logger.LogInformation($"Updating stats for player {player.Name} ({player.Id}).");
+                        bool? isWin = null;
+                        if (winners.Count == 0) isWin = null;
+                        else { isWin = winners.Contains(player.Id); }
+
+                        logger.LogInformation($"Player {player.Name} ({player.Id}) score: {playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0}.");
+
+                        var playerScore = playerScores.FirstOrDefault(x => x.PlayerId == player.Id)?.TotalScore ?? 0;
+                        await playerRepo.UpdateStatsAsync(player.Id, playerScore, isWin);
+
+                        logger.LogInformation($"Player {player.Name} ({player.Id}) stats updated.");
+                    }
+
+                    // Send game end notification to all players
+                    await hubContext.Clients.Group(round.GameId).SendAsync("GameEnded", new GameEndedDto
+                    {
+                        Players = [.. round.Game.Players.Select(p => new PlayerDetailDto {
                         Id = p.Id,
                         Name = p.Name,
                         Email = p.Email
                     })],
-                    WinnerPlayerIds = winners
-                });
+                        WinnerPlayerIds = winners
+                    });
 
-                // Remove players from the game group
-                foreach (var player in round.Game.Players)
-                {
-                    if (Hubs.GameHub.PlayerConnections.TryGetValue(player.Id, out var connectionId))
+                    // Remove players from the game group
+                    foreach (var player in round.Game.Players)
                     {
-                        await hubContext.Groups.RemoveFromGroupAsync(connectionId, round.GameId);
+                        if (Hubs.GameHub.PlayerConnections.TryGetValue(player.Id, out var connectionId))
+                        {
+                            await hubContext.Groups.RemoveFromGroupAsync(connectionId, round.GameId);
+                        }
                     }
                 }
             }

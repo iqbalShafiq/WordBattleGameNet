@@ -157,6 +157,20 @@ namespace WordBattleGame.Hubs
             if (GameJoinStatus[gameId].Count == expectedPlayers.ToList().Count)
             {
                 await _playerRepository.UpdateStatsAsync([.. expectedPlayers.Select(p => p.Id)]);
+
+                // Send initial scores to all players
+                var playerScoreDtos = expectedPlayers.Select(p => new PlayerScoreDto
+                {
+                    PlayerId = p.Id,
+                    PlayerName = p.Name,
+                    TotalScore = 0
+                }).ToList();
+                var gameScoreDto = new GameScoreDto
+                {
+                    PlayerScores = playerScoreDtos
+                };
+                await Clients.Group(gameId).SendAsync("GameScores", gameScoreDto);
+                
                 await Clients.Group(gameId).SendAsync("AllPlayersJoined", new AllPlayersJoinedDto { GameId = gameId });
                 await StartRound(gameId, 1, "id", "very easy");
             }

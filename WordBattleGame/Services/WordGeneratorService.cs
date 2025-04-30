@@ -18,7 +18,13 @@ namespace WordBattleGame.Services
 
         private static string BuildSystemPrompt(string difficulty, string language, IEnumerable<string> excludedWords)
         {
-            return $"You are a multilingual word generation assistant. Generate a single {difficulty} word in {language} with 5-10 letters, suitable for a guessing game. Only return the word like 'Headset' (without quotes), no explanation. Exclude the following words: {string.Join(", ", excludedWords)}.";
+            return $"""
+                You are a multilingual word generation assistant.
+                Generate a single {difficulty} word in {language} with 5 to 10 letters (inclusive), suitable for a guessing game.
+                The word must be a single, common word (not a phrase or compound word), and should not contain numbers, special characters, or punctuation.
+                Exclude the following words: {string.Join(", ", excludedWords)}.
+                Output only the word, and nothing else.
+            """;
         }
 
         private static object BuildRequestBody(string systemPrompt, string prompt)
@@ -37,13 +43,20 @@ namespace WordBattleGame.Services
         public async Task<string> GenerateWordAsync(string language, string difficulty, IEnumerable<string> userIds)
         {
             string word = string.Empty;
-            var excludedWords = new List<string>();
             int maxAttempts = 5;
             int attempt = 0;
+            
+            var excludedWords = await _wordHistoryRepository.GetWordsByUserIdsAsync(userIds, _historyPeriod);
+            _logger.LogInformation($"Excluded words for userIds [{string.Join(", ", userIds)}]: {string.Join(", ", excludedWords)}");
+
             do
             {
                 var systemPrompt = BuildSystemPrompt(difficulty, language, excludedWords);
-                var prompt = $"Generate a single {difficulty} word in {language} with 5-10 letters, suitable for a guessing game. Only return the word, no explanation.";
+                var prompt = $"""
+                    Generate a single {difficulty} word in {language} with 5 to 10 letters (inclusive), 
+                    suitable for a guessing game. 
+                    Only return the word, no explanation.
+                """;
                 var requestBody = BuildRequestBody(systemPrompt, prompt);
                 var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
                 {

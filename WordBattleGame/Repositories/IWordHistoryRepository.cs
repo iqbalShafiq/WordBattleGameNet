@@ -4,5 +4,6 @@ namespace WordBattleGame.Repositories
     {
         Task<bool> ExistsAsync(string word, IEnumerable<string> userIds, TimeSpan period);
         Task InsertAsync(string word, IEnumerable<string> userIds, DateTime timestamp);
+        Task<List<string>> GetWordsByUserIdsAsync(IEnumerable<string> userIds, TimeSpan period);
     }
 }

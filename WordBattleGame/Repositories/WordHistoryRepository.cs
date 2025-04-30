@@ -33,5 +33,15 @@ namespace WordBattleGame.Repositories
             await _context.WordHistories.AddRangeAsync(entries);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<List<string>> GetWordsByUserIdsAsync(IEnumerable<string> userIds, TimeSpan period)
+        {
+            var since = DateTime.UtcNow - period;
+            return await _context.WordHistories
+                .Where(wh => userIds.Contains(wh.UserId) && wh.Timestamp >= since)
+                .Select(wh => wh.Word)
+                .Distinct()
+                .ToListAsync();
+        }
     }
 }
